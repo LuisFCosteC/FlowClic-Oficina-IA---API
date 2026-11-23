@@ -587,6 +587,15 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Probar: Ir a Administración → pestaña "Conexiones API"; comprobar el catálogo de modelos arriba; filtrar por proveedor o agente; pulsar "Gestionar agente" en una fila para abrir el panel de credenciales de ese agente; rotar o añadir credencial y al cerrar verificar que la tabla global se actualiza.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 484ms). Commit `78fb828` en `dev` del FRONT.
 
+- **ADM03 (Dev Junior, 2026-11-23, EN QA)** — Agentes: archivar/restaurar, toggle archivados y límites (FRONT):
+  - Cambiada pestaña por defecto de Administración a **"Agentes"** (`agents`).
+  - Interruptor **"Mostrar archivados"** en cabecera para alternar entre agentes activos y lista completa vía `GET /api/agents?includeArchived=true`.
+  - Agentes archivados identificados con estilo tenue, nombre tachado y badge con fecha de archivado.
+  - Botón **"Archivar"** (en activos) y **"Restaurar"** (en archivados) con confirmación modal en la propia UI (sin `window.confirm`).
+  - Manejo completo de errores 409: muestra alerta roja con `LIMIT_EXCEEDED` ("Límite superado: ...") o conflicto si hay tickets abiertos o duplicidad de nombre.
+  - Probar: Ir a Administración → pestaña "Agentes"; activar "Mostrar archivados"; pulsar "Archivar" en un agente sin tareas abiertas y verificar confirmación modal; comprobar que pasa a estado archivado; pulsar "Restaurar" y verificar que reaparece activo; probar archivar un agente con tareas y verificar mensaje 409 en el modal.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 435ms). Commit `5fb1d3c` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
