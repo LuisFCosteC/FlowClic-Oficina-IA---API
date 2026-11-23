@@ -158,13 +158,13 @@ Después de T80: el Arquitecto revisa el código, este archivo y `QA_REPORT.md`,
 
 | ID | Descripción | Responsable | Estado | Criterio de aceptación |
 |---|---|---|---|---|
-| A01 | `migrations/003_admin.sql` (PLAN §13.1) + semilla de `limits` por defecto y de `project` vacío. | DEV | PENDIENTE | `GET /api/admin/settings/limits` devuelve los valores por defecto. |
-| A02 | `GET/PUT /api/admin/settings/project` y `/limits` con zod por clave (`project`: companyName, projectName, description, goals[], stack[] con longitudes máximas; `limits`: enteros 1–100 y booleano). Emite `settings.updated`. | DEV | PENDIENTE | Un valor fuera de rango → 400; OPERATOR → 403; el cambio llega por SSE. |
-| A03 | CRUD de `project_rules` + `PUT /api/admin/rules/order`. Emite `rule.*`. | DEV | PENDIENTE | Reordenar persiste el orden; severidad inválida → 400. |
-| A04 | Aplicar límites: `maxAgents` al crear o restaurar un agente; `maxActiveTicketsPerAgent` y `requireApprovalForDone` en el workflow (T41/T43/T44: si ya están hechas, añadir la validación; si no, quedan como criterio de esas tareas). Respuesta 409 `LIMIT_EXCEEDED`. | DEV | PENDIENTE | Tests de cada límite. |
-| A05 | Conexión de BD desde el panel (PLAN §13.2): refactorizar `db/client.ts` a `getDb()` y `swapDb()` y eliminar las capturas de `db` en `createApp`/repositorios; `GET /api/admin/db`, `POST /api/admin/db/test`, `PUT /api/admin/db` (migrar, copiar mi ADMIN si la BD nueva no tiene usuarios, `.env.bak`, escritura atómica de solo 2 claves, cambio en caliente, revocar sesiones, `system.db_changed`, auditoría sin token). Exige `requireRecentMfa` y `ADMIN_ALLOW_DB_CHANGE=true`. | DEV | PENDIENTE | Tests con 2 BD temporales: después del cambio, `GET /api/agents` lee de la nueva sin reiniciar; una URL que falla no toca el `.env`; ninguna respuesta ni log contiene el token; el resto de líneas del `.env` queda intacto. |
-| A06 | `POST /api/agents/:id/restore` y `GET /api/agents?includeArchived=true` (solo ADMIN) para la pestaña Agentes. | DEV | PENDIENTE | Restaurar respeta `maxAgents` y la unicidad del nombre. |
-| A07 | Usuarios y auditoría: `GET/POST /api/admin/users`, `PATCH /api/admin/users/:id`, `POST .../revoke-sessions`, `GET /api/admin/audit`. Crear o cambiar rol exige MFA reciente. No se puede dejar el sistema sin ADMIN activo (409). Desactivar revoca las sesiones. Nunca se devuelve `password_hash` ni `mfa_secret_enc`. | DEV | PENDIENTE | Tests: el último ADMIN no puede degradarse; un usuario desactivado → 401 en su siguiente petición; las respuestas no contienen campos sensibles. |
+| A01 | `migrations/003_admin.sql` (PLAN §13.1) + semilla de `limits` por defecto y de `project` vacío. | DEV | EN REVISIÓN (QA Junior R10–R11; falta QA Senior) | `GET /api/admin/settings/limits` devuelve los valores por defecto. |
+| A02 | `GET/PUT /api/admin/settings/project` y `/limits` con zod por clave (`project`: companyName, projectName, description, goals[], stack[] con longitudes máximas; `limits`: enteros 1–100 y booleano). Emite `settings.updated`. | DEV | EN REVISIÓN (QA Junior R10–R11; falta QA Senior) | Un valor fuera de rango → 400; OPERATOR → 403; el cambio llega por SSE. |
+| A03 | CRUD de `project_rules` + `PUT /api/admin/rules/order`. Emite `rule.*`. | DEV | EN REVISIÓN (QA Junior R10–R11; falta QA Senior) | Reordenar persiste el orden; severidad inválida → 400. |
+| A04 | Aplicar límites: `maxAgents` al crear o restaurar un agente; `maxActiveTicketsPerAgent` y `requireApprovalForDone` en el workflow (T41/T43/T44: si ya están hechas, añadir la validación; si no, quedan como criterio de esas tareas). Respuesta 409 `LIMIT_EXCEEDED`. | DEV | EN REVISIÓN (QA Junior R10–R11; falta QA Senior) | Tests de cada límite. |
+| A05 | Conexión de BD desde el panel (PLAN §13.2): refactorizar `db/client.ts` a `getDb()` y `swapDb()` y eliminar las capturas de `db` en `createApp`/repositorios; `GET /api/admin/db`, `POST /api/admin/db/test`, `PUT /api/admin/db` (migrar, copiar mi ADMIN si la BD nueva no tiene usuarios, `.env.bak`, escritura atómica de solo 2 claves, cambio en caliente, revocar sesiones, `system.db_changed`, auditoría sin token). Exige `requireRecentMfa` y `ADMIN_ALLOW_DB_CHANGE=true`. | DEV | EN REVISIÓN (QA Junior R10–R11; falta QA Senior) | Tests con 2 BD temporales: después del cambio, `GET /api/agents` lee de la nueva sin reiniciar; una URL que falla no toca el `.env`; ninguna respuesta ni log contiene el token; el resto de líneas del `.env` queda intacto. |
+| A06 | `POST /api/agents/:id/restore` y `GET /api/agents?includeArchived=true` (solo ADMIN) para la pestaña Agentes. | DEV | EN REVISIÓN (QA Junior R10–R11; falta QA Senior) | Restaurar respeta `maxAgents` y la unicidad del nombre. |
+| A07 | Usuarios y auditoría: `GET/POST /api/admin/users`, `PATCH /api/admin/users/:id`, `POST .../revoke-sessions`, `GET /api/admin/audit`. Crear o cambiar rol exige MFA reciente. No se puede dejar el sistema sin ADMIN activo (409). Desactivar revoca las sesiones. Nunca se devuelve `password_hash` ni `mfa_secret_enc`. | DEV | EN REVISIÓN (QA Junior R10–R11; falta QA Senior) | Tests: el último ADMIN no puede degradarse; un usuario desactivado → 401 en su siguiente petición; las respuestas no contienen campos sensibles. |
 
 ## Bloque F: FRONT (login y Administración, mismos estilos existentes)
 
@@ -728,3 +728,11 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - `POST /api/admin/backup` → 200 `{"folder":"backups/20261123T141810Z","tables":{"agents":4,...},"createdAt"}`. Carpeta y archivos con permisos solo para el propietario; excluye `sessions`; dos backups seguidos no se pisan; auditoría `admin.backup_created`.
   - Probar: `pytest tests/test_admin_db_api.py`.
 
+
+- **Estados tras las rondas 10 y 11 (CEO, 2026-11-23):**
+  - API (Dev Senior): A01–A07, A07a (arreglo `183d442`) y GM00 → **EN REVISIÓN**. Falta la validación del QA Senior.
+  - FRONT (Dev Junior): ADM01–ADM09, AG-MANUAL, ADM-ERR, CONN01 y WS-ID → **EN REVISIÓN**. Faltan la "Revisión Dev Senior" y el QA Senior.
+  - Conocido, no bloquea: `test_envfile` y `test_fileperms` fallan en Windows por las ACL heredadas (tarea FIX-WIN).
+  - Respuesta del CEO a los hallazgos del QA Senior (R11):
+    - Los commits 3D de hoy (4c4e9fc, 0f135b8, 2e30eb5, 9629b9a, 1d4fc92, f25f604, cf6a598 y 852fb1a) estaban autorizados por el CEO. El bloqueo del 3D rige desde V3D09.
+    - Rutas admin sin autenticación: es intencionado hasta S09 y la API escucha solo en 127.0.0.1.

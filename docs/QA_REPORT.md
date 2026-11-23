@@ -641,3 +641,57 @@ Al terminar las pruebas contra Turso, se ejecutó `python -m app.db.wipe --yes` 
 - **DEVUELTA**: `G07 / AG-EDIT` (archivos no commiteados en repo FRONT).
 - **PENDIENTE / NO APLICA**: `A00–A05`, `MOD01`, `FLOW01`.
 - **HECHO (confirmadas por Senior)**: `F07`, `J01–J04`, `T72`, `T74`, `T70`, `T71`, `T73`, `T75`, `F03a`, `C05`, `G05`, `K01`, `C02`.
+
+---
+
+## Ronda 10 — QA Junior (2026-11-23, solo lectura)
+
+| Herramienta | Resultado |
+|---|---|
+| pytest | 754 pasan; 2 fallan (`test_envfile` y `test_fileperms`, ACL heredadas de Windows, ya conocidos) |
+| ruff, mypy (73 archivos) | OK |
+| npm run lint / npm run build | OK |
+
+GET contra Turso: settings/project, settings/limits, rules, users, db, workspaces y credentials → 200. audit → **500** (`KeyError: 'action'`; Turso devolvía la columna como `ACTION` con `SELECT *`).
+
+| ID | Resultado | Evidencia |
+|---|---|---|
+| A01–A06, A07b, GM00 | PASA | `test_admin_settings_api.py`, `test_limits_api.py`, `test_admin_audit_users_api.py`, `test_admin_db_api.py`; commit `199d70f` |
+| A07a | FALLA | `audit_service.py:92`, `KeyError: 'action'` en Turso |
+| ADM01–ADM09, ADM-ERR | PASA | Paneles `Workspaces`, `Connections`, `ProjectSettings`, `Rules`, `Limits`, `Audit`, `Users` y `DbConnection`; 9 pestañas activas |
+| AG-MANUAL | FALLA | El modal seguía con plantillas y con permisos precargados |
+
+Seguridad:
+- `/admin/db` no devuelve token, URL completa ni ruta.
+- `/users` no devuelve el hash de la contraseña; la auditoría redacta los datos sensibles.
+- 0 `AIza` y 0 claves `sk-` en `dist/`; 0 `dangerouslySetInnerHTML`; nada sensible en el almacenamiento del navegador.
+
+3D: ningún cambio desde 852fb1a.
+
+## Ronda 11 — QA Junior (2026-11-23, solo lectura)
+
+Herramientas: igual que en la Ronda 10 (754 pasan y 2 fallos conocidos de Windows; ruff, mypy, lint y build OK).
+
+GET contra Turso: los 9 endpoints → 200, incluido `audit?limit=20`, que antes daba 500. `ws-qa-r8` ya no existe.
+
+| ID | Resultado | Evidencia |
+|---|---|---|
+| A07a | PASA | `183d442`: alias explícitos en `audit_service.py:78-81`; 200 en Turso, sin secretos |
+| AG-MANUAL | PASA | `27b9a81`: `agentTemplates.ts` eliminado; el formulario empieza vacío; sin espacios de trabajo por defecto; 6 restricciones globales con candado; PATCH con diff |
+| ADM-ERR | PASA | `0e8ebd7`: `AdminErrorCard` con "Reintentar"; mensaje de red en `client.ts:51` |
+| CONN01 | PASA | `b47d94c`: una sola pestaña "Conexiones" (claves + BD); orden de pestañas correcto; clave `type=password` que se vacía al guardar y al desmontar; texto del 403 |
+| WS-ID | PASA | `2039d82`: regex, id propuesto desde el nombre, 400 bajo el campo |
+
+Fallos: ninguno. Veredicto propuesto: todas a EN REVISIÓN.
+
+## Ronda 11 — QA Senior (parcial)
+
+No recibió los informes de las rondas 10 y 11. Comprobaciones propias:
+- a) audit y db → 200, sin claves.
+- b) CONN01 seguro en el código (`ConnectionsPanel.tsx:71-78`, `DbConnectionPanel.tsx:51-58`).
+- c) 20/20 tests de A04 y A07b pasan.
+- d) Encontró commits 3D anteriores a 852fb1a. Respuesta del CEO: estaban autorizados; el bloqueo rige desde V3D09.
+
+Hallazgo: las rutas admin no tienen autenticación. Es intencionado hasta S09; la API escucha solo en 127.0.0.1.
+
+Veredictos pendientes: el QA Senior debe repetir la ronda leyendo este archivo.
