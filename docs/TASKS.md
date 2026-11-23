@@ -608,6 +608,15 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Probar: Ir a Administración → pestaña "Proyecto"; rellenar empresa, proyecto, descripción, añadir 2 objetivos y 3 tecnologías al stack; pulsar "Guardar cambios" y comprobar mensaje verde de éxito; modificar un valor desde curl/API y comprobar que se actualiza en vivo en pantalla.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 471ms). Commit `77d9b50` en `dev` del FRONT.
 
+- **ADM05 (Dev Junior, 2026-11-23, EN QA)** — Gestión de Reglas y Restricciones Globales (A03 en FRONT):
+  - Habilitada pestaña **"Reglas"** (`rules`) en `AdminView.tsx` y creado componente `RulesPanel.tsx`.
+  - Lista interactiva de reglas del proyecto con ordenación posicional mediante flechas Subir/Bajar consumiendo `PUT /api/admin/rules/order`.
+  - Cada regla muestra: título, descripción detallada, severidad con badges contrastados (`OBLIGATORIA (MUST)` en rojo/ámbar y `RECOMENDADA (SHOULD)` en cyan) e interruptor Activa/Inactiva en vivo vía `PATCH /api/admin/rules/{id}`.
+  - Modales en la UI para Crear regla (`POST /api/admin/rules`), Editar regla (`PATCH`) y Eliminar regla (`DELETE`) con confirmación sin `window.confirm`.
+  - Sección inferior con las **6 restricciones globales inviolables con candado** (`Lock`) en modo solo lectura, reflejando las políticas aplicadas estrictamente por la API.
+  - Probar: Ir a Administración → pestaña "Reglas"; añadir una regla obligatoria (MUST) y otra recomendada (SHOULD); cambiar el estado de activa/inactiva con el checkbox; cambiar el orden usando las flechas arriba/abajo y comprobar que persiste; editar una regla; eliminar una regla con el modal de confirmación; comprobar que abajo aparecen las 6 restricciones globales bloqueadas con candado.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 780ms). Commit `d594d97` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
