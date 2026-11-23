@@ -244,7 +244,7 @@ Las migraciones se renumeran: `003_agent_credentials.sql` (C05) y `004_admin.sql
 > DEVUELTA POR ARQUITECTO (revisión de seguridad, 2026-11-22): (1) la comprobación de localhost se fía de `request.client.host`: arrancar uvicorn con `--no-proxy-headers` (también en el README) y rechazar con 403 las peticiones de setup que traigan `X-Forwarded-For`, `Forwarded` o `X-Real-IP`, o un `Host` distinto de localhost/127.0.0.1; (2) carrera TOCTOU: si dos peticiones de setup llegan a la vez, pueden crear dos conexiones o dos ADMIN. Usar un único lock de setup para toda la secuencia comprobación + escritura (`swap_db` y la creación del ADMIN), con la inserción como `INSERT ... WHERE NOT EXISTS (SELECT 1 FROM users WHERE role='ADMIN')` dentro de una transacción, y consumir el código tras cada paso exitoso. Tests: dos peticiones concurrentes → solo una tiene éxito; una cabecera de proxy → 403.
 | F06 | FRONT: asistente de primer arranque (código de setup → URL y token de la BD → primer ADMIN → login → activar MFA). | DEV | PENDIENTE | Con la bóveda vacía, la app guía hasta tener la BD y el usuario sin tocar ningún archivo. |
 | C05 | `migrations/003_agent_credentials.sql` + endpoints de PLAN §16.6 + interfaz `SecretsProvider` (solo declarada). Varias conexiones por agente, también del mismo proveedor (CEO 2026-11-23; índice único (agent_id, label) entre activas). Nunca se devuelve el valor; auditoría sin el valor. | DEV | HECHO | Tests: ninguna respuesta contiene el secreto; en la BD, `ciphertext` no contiene el valor; copiar el texto cifrado a otra fila o agente → falla al descifrar; rotar actualiza `rotated_at` y `last4`. |
-| F07 | FRONT: Administración → Agentes → **Credenciales API** (lista con `••••last4`, Añadir, Rotar, Revocar; campos `type=password` que se vacían; pide MFA si la API responde `MFA_REQUIRED`). | DEV | EN REVISIÓN | La clave no aparece en las respuestas de red (DevTools), ni en el estado de React, ni en `localStorage`. |
+| F07 | FRONT: Administración → Agentes → **Credenciales API** (lista con `••••last4`, Añadir, Rotar, Revocar; campos `type=password` que se vacían; pide MFA si la API responde `MFA_REQUIRED`). | DEV | HECHO | La clave no aparece en las respuestas de red (DevTools), ni en el estado de React, ni en `localStorage`. |
 | QC1 | QA de secretos: el `.env` solo tiene `APP_MASTER_KEY` como secreto; ni `vault.db` ni la BD contienen secretos en claro; ningún endpoint ni log los devuelve; el setup se cierra; rotación de la clave maestra; restaurar un backup requiere la clave maestra. | QA | PENDIENTE | Evidencia en QA_REPORT (sin pegar ningún secreto). |
 
 > NOTA DEL ARQUITECTO (2026-11-22): **A05** pasa a escribir en la bóveda (C02), no en el `.env`. **S02** genera `APP_MASTER_KEY` en lugar de `APP_ENCRYPTION_KEY`/`SESSION_SECRET` (`SESSION_SECRET` no hace falta: las sesiones son tokens opacos con hash). **S08** usa `crypto.py` de C01.
@@ -507,3 +507,19 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - **FIX-QA6:** `DEVUELTA` por persistencia de CAL01.
   - **QM0:** `DEVUELTA` exclusivamente por CAL01. El flujo completo (crear agente Gemini Flash, editar, 2 credenciales, workspace, tarea spec dividida, transiciones PENDING->DONE, recarga) funcionó al 100% en Turso. BD vaciada al terminar con `db.wipe`.
   - Suite global: pytest (678 passed), ruff (clean), mypy (clean, 64 files), npm run lint (clean), npm run build (clean).
+
+- **V3D06 (Ampliación Cafetería de Desayuno + Zona Gaming 3 TVs)** — (repo FRONT, commit 9629b9a):
+  - **Gran Cafetería & Desayuno**:
+    - Mostrador largo de cuarzo blanco con máquina espresso comercial (doble tolva de café, portafiltro cromado doble, vaporizador), molinillo de café y fila de tazas cerámicas de colores.
+    - Zona de preparación de desayuno: tostadora con rebanadas de pan tostado dorado saliendo de la ranura, dispensador de zumo de naranja natural con jarra de vidrio, cesta de bollería con croissants horneados y plato servido con huevos y tostada.
+  - **Mesas donde comer**:
+    - 2 mesas de cafetería de madera/mármol claro con base metálica, cada una rodeada por 3 sillas nórdicas ergonómicas (total 6 puestos para comer). Platos y tazas de café servidas sobre las mesas.
+  - **Zona Gaming con 3 TVs y Consolas**:
+    - TV 1 (55", juego de carreras synthwave retro con HUD 'SPEED: 260 KM/H, LAP 3/3') con consola estilizada vertical blanca/negra tipo Play con tira LED azul neón + 2 mandos inalámbricos.
+    - TV 2 (55", juego de aventura de plataformas con HUD 'COINS: 99, ❤❤❤') con consola estilizada monolítica tipo Xbox negra mate con anillo LED verde neón + 2 mandos inalámbricos.
+    - TV 3 (55", juego espacial con HUD 'SHIELD: 100%, SCORE: 58,400') con consola estilizada gaming rig con tira LED violeta/magenta neón + 2 mandos inalámbricos.
+  - **9 Pufs anatómicos frente a los TVs**:
+    - Exactamente 3 pufs anatómicos frente a cada uno de los 3 televisores (3 en tonos azules/cyan, 3 en tonos verdes/lima, 3 en tonos violeta/terracota).
+  - **Slots de agentes (`LOUNGE_SLOTS`)**:
+    - Actualizados a 15 puestos (los 9 pufs de los TVs + los 6 puestos en las mesas de comedor) para que los agentes en descanso puedan jugar o desayunar con holgura.
+  - Lint y build pasan al 100% en verde.

@@ -552,3 +552,17 @@ Al terminar las pruebas contra Turso, se ejecutó `python -m app.db.wipe --yes` 
 - **EN REVISIÓN**: `J01`, `J02`, `J03`, `J04`, `T72`, `T74`, `F07`.
 - **DEVUELTA**: `CAL01`, `G07`, `FIX-QA6`, `QM0` (por CAL01).
 - **HECHO** (previas confirmadas): `T70`, `T71`, `T73`, `T75`, `F03a`, `C05`, `G05`, `K01`, `C02`.
+
+---
+
+## Ronda 8 — QA Senior (muestreo, breve) — 2026-11-23
+
+**Aviso:** no existe "Ronda 8 — QA Junior" en el repo, ni en QA_REPORT, ni en el historial de git (API ni FRONT). La última es la **Ronda 7**. El muestreo se hizo sobre lo que la Ronda 7 afirma para las tres áreas pedidas. Versiones probadas: API `fb14dd3` (copia limpia de HEAD), FRONT `9629b9a` (HEAD).
+
+| Prueba | Tarea | Resultado | Evidencia | Motivo |
+|---|---|---|---|---|
+| 1. Fuga de la clave | F07 | **HECHO** | `pytest tests/test_credentials_api.py`: 32 passed (la clave nunca sale en respuestas; solo `last4`). FRONT: `localStorage` sin uso para claves (solo un comentario); campos `type="password"`; el estado se vacía al guardar y al desmontar. | Verificado en código y tests; ya se comprobó en vivo en Ronda 6. |
+| 2. Permisos 403 | — (S09) | **PENDIENTE S09** (no bloquea) | `grep requireRole` en `app/`: sin resultados. Los únicos 403 con prueba son los de SETUP (`pytest -k 403`: pasan, en `tests/test_setup.py`). | No hay control de roles todavía. Los 403 por rol dependen de S09 y no se pueden validar hoy. |
+| 3. Calendario | CAL01 | **HECHO** | En HEAD `9629b9a` no queda ninguna fecha fija `2026-11-22` en `src/`. `RoadmapCalendarView.tsx` usa `todayLocal()` (`src/utils/date.ts`: `getFullYear/getMonth/getDate`, hora local). Commit `8ac97f2` "CAL01: Hoy real". | La DEVUELTA de la Ronda 7 es anterior a ese commit y ya no aplica. No lo probé en el navegador. |
+
+**Tareas:** F07 pasa a HECHO. CAL01 no tiene fila propia en TASKS (se resolvió en QM0/FIX-QA6, ver Ronda 6–7). Permisos 403: pendientes de S09.
