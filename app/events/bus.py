@@ -28,6 +28,7 @@ EventType = Literal[
     "memory.created",
     "memory.updated",
     "memory.deleted",
+    "message.created",
     "settings.updated",
     "rule.created",
     "rule.updated",

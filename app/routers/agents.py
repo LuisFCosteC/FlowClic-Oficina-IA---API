@@ -6,10 +6,17 @@ from fastapi import APIRouter, Depends, Query, Response
 from pydantic import Field
 
 from app.db.database import Database, get_db
-from app.domain.schemas import Agent, AgentCreate, AgentStatusBody, AgentUpdate, StrictInput
+from app.domain.schemas import (
+    Agent,
+    AgentCreate,
+    AgentStatusBody,
+    AgentUpdate,
+    StatusSummary,
+    StrictInput,
+)
 from app.errors import ErrorResponse
 from app.events.bus import EventBus, get_bus
-from app.services import agents_service
+from app.services import agents_service, messages_service
 from app.services.agent_guard import AgentGuard
 
 router = APIRouter(
@@ -111,3 +118,11 @@ def report_outcome(agent_id: str, body: FailureReport, db: Db, bus: Bus) -> Agen
     if body.usd_today is not None:
         agent = guard.check_budget(agent_id, body.usd_today)
     return agent
+
+
+@router.get(
+    "/{agent_id}/status-summary",
+    summary='Resumen "qué hace / qué le falta" (ticket actual, bloqueo y siguiente paso)',
+)
+def status_summary(agent_id: str, db: Db) -> StatusSummary:
+    return messages_service.status_summary(db, agent_id)

@@ -281,3 +281,78 @@ class MemoryUpdate(StrictInput):
     content: Annotated[str, Field(max_length=20000)] | None = None
     project: ProjectName | None = None
     ticket_id: Ref | None = None
+
+
+# ── Mensajes (chat de mando) y resumen de estado ─────────────────────────────────────────────
+MessageScope = Literal["GLOBAL", "AGENT"]
+MessageKind = Literal["ORDER", "QUESTION", "NOTE", "STATUS", "REPLY"]
+HumanMessageKind = Literal["ORDER", "QUESTION", "NOTE"]  # STATUS y REPLY: solo sistema/agentes
+MessageStatus = Literal["PENDING", "ACK", "DONE", "REJECTED"]
+AuthorType = Literal["HUMAN", "AGENT", "SYSTEM"]
+
+
+class Message(CamelModel):
+    id: str
+    scope: MessageScope
+    agent_id: str | None
+    author_type: AuthorType
+    author_id: str
+    kind: MessageKind
+    body: str
+    status: MessageStatus
+    ticket_id: str | None
+    created_at: str
+
+
+class MessageCreate(StrictInput):
+    scope: MessageScope
+    agent_id: Ref | None = None
+    kind: HumanMessageKind = "ORDER"
+    body: Annotated[str, Field(min_length=1, max_length=2000)]
+    ticket_id: Ref | None = None
+
+
+class ThreadEntry(CamelModel):
+    """Una línea del hilo: un mensaje o un evento de ticket, ordenados por fecha."""
+
+    id: str
+    entry_type: Literal["MESSAGE", "TICKET_EVENT"]
+    kind: str
+    scope: MessageScope | None
+    agent_id: str | None
+    author_type: AuthorType | None
+    author_id: str | None
+    body: str
+    status: MessageStatus | None
+    ticket_id: str | None
+    created_at: str
+
+
+class TicketBrief(CamelModel):
+    id: str
+    title: str
+    status: TicketStatus
+    priority: Priority
+    description: str
+    since_seconds: int
+
+
+class PendingApprovalBrief(CamelModel):
+    id: str
+    title: str
+    gate: Gate
+
+
+class StatusSummary(CamelModel):
+    """Tarjeta "qué está haciendo / qué le falta" de un agente."""
+
+    agent_id: str
+    name: str
+    status: AgentStatus
+    current_task: str | None
+    ticket: TicketBrief | None
+    open_tickets: dict[str, int]
+    blocked_reason: str | None
+    pending_approvals: list[PendingApprovalBrief]
+    next_step: str
+    summary: str
