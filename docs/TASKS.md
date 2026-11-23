@@ -44,7 +44,7 @@ Cada tarea de DEV pasa a `EN QA`; QA la verifica contra su criterio y la marca `
 | T11 | `src/db/migrate.ts`: runner con tabla `schema_migrations`, aplica `migrations/NNN_*.sql` en orden, cada una en transacción; usable como CLI y como función (tests). | DEV | EN QA | 1ª ejecución aplica todo; 2ª no hace nada; una migración con SQL roto no queda registrada ni deja tablas parciales. |
 | T12 | `migrations/001_init.sql` con el esquema exacto de PLAN §3 (CHECKs e índices incluidos). | DEV | EN QA | Insertar `status='FOO'` en agents/tickets/approvals falla; 2 aprobaciones PENDING para el mismo ticket fallan por índice único. |
 | T13 | `seeds/seed.ts` idempotente: 4 agentes (ids `sheldon`, `leonard`, `penny`, `raj` con datos de PLAN §3), 3–4 tickets de ejemplo, 1 nota de memoria. | DEV | EN QA | Ejecutar 2 veces deja exactamente 4 agentes; Sheldon `isCto=1`. |
-| T14 | Script `db:reset` que borra la BD local y re-ejecuta migrate + seed; se niega si la URL no empieza por `file:`. | DEV | PENDIENTE | Con URL `libsql://...` termina sin borrar nada y con mensaje claro. |
+| T14 | Script `db:reset` que borra la BD local y re-ejecuta migrate + seed; se niega si la URL no empieza por `file:`. | DEV | EN CURSO | Con URL `libsql://...` termina sin borrar nada y con mensaje claro. |
 | T15 | QA: probar migrate/seed/reset y CHECKs con `local.db`; documentar en QA_REPORT. | QA | PENDIENTE | Todos los criterios T11–T14 verificados manualmente. |
 
 ## Bloque 2 — Núcleo de la API
@@ -128,7 +128,6 @@ Después de T80: el Arquitecto revisa el código, este archivo y `QA_REPORT.md`,
 ## Notas DEV
 
 - **T01** — Scaffold API: package.json (scripts PLAN §9), tsconfig, .gitignore, .env.example, deps solo de PLAN §8 (express@4, @types/express@4). Archivos: package.json, package-lock.json, tsconfig.json, .gitignore, .env.example, src/server.ts (placeholder). Probar: `npm install && npm run typecheck`.
-- **T14** — Script `db:reset` (src/db/reset.ts): borra local.db(+wal/shm/journal) y ejecuta migrate+seed; se niega (exit 1, sin borrar) si la URL no empieza por `file:`. Probar: `npm run db:reset`; `TURSO_DATABASE_URL=libsql://x.turso.io npm run db:reset` → mensaje y exit 1.
 - **T20** — app.ts (`createApp({db, corsOrigin})`, sin listen) + server.ts (env → db → listen, cierre limpio) con cors(CORS_ORIGIN), JSON y GET /api/health (SELECT 1). Probar: `npm run dev` y `curl localhost:4000/api/health` → {"ok":true,"db":"up","version":...}. CORS: la API solo responde Access-Control-Allow-Origin con el origen configurado, así que el navegador bloquea otros orígenes.
 - **T21** — middleware/errors.ts: AppError (+helpers notFound/conflict/unprocessable/validation), errorHandler (zod→400 con details, JSON inválido→400, 500 sin stack) y notFoundHandler JSON para cualquier ruta; registrados en app.ts. Probar: `curl localhost:4000/api/nada` → 404 NOT_FOUND con forma {error:{code,message,details}}; POST con JSON roto → 400 VALIDATION_ERROR. El 400 con details de zod se ejerce al llegar las rutas con schemas.
 - **T22** — domain/types.ts (DTOs PLAN §6, uniones de string) y domain/schemas.ts (zod de entrada: agentes, tickets, aprobaciones, memoria, queries; los PATCH son estrictos y rechazan campos desconocidos, p. ej. `status` en PATCH /agents/:id). Probar: `npm run typecheck`; `grep -rn "enum " src` (solo z.enum).
@@ -260,3 +259,27 @@ Las migraciones se renumeran: `003_agent_credentials.sql` (C05) y `004_admin.sql
 - **S02** — Hecho junto con C03 (misma pieza): `python scripts/setup_env.py` crea el .env desde .env.example con APP_MASTER_KEY y SESSION_SECRET aleatorios (32 B base64) y nunca sobrescribe: en un .env existente solo añade las claves que falten o estén vacías (el resto queda intacto) y una 2ª ejecución no cambia nada. Permisos (nota del Arquitecto): en Windows `icacls <.env> /inheritance:r /grant:r "<USUARIO>:F"` vía subprocess sin shell; en POSIX chmod 0o600 y aviso si un .env existente es más permisivo (app/security/fileperms.py). .env.example sin valores reales (y sin TURSO_*). Variables validadas en app/config.py (T02; en production exigen APP_MASTER_KEY y SESSION_SECRET). `backups/`, `.env.bak` y `data/` en .gitignore. Tests: tests/test_envfile.py (incluye el de icacls: un único permiso en Windows). PENDIENTE: documentarlo en docs/SECURITY.md (S13). Probar: `pytest tests/test_envfile.py`; `python scripts/setup_env.py` dos veces.
 - **C03** — app/security/envfile.py `import_env_secrets(.env, vault, env_url, env_token)`: si la bóveda no tiene conexión y el .env trae TURSO_*, los guarda cifrados, verifica que la bóveda devuelve lo mismo y SOLO entonces elimina esas líneas del .env con escritura atómica (temporal + renombrado, queda solo para el propietario), sin .env.bak, conservando byte a byte el resto (incluye CRLF/comentarios); respaldo desde variables de entorno reales; si la bóveda ya tiene conexión no toca el .env (solo avisa). El log solo dice "conexión importada a la bóveda". `open_configured_database(settings)` lo ejecuta al arrancar (API y CLIs). setup_env.py y .env.example sin TURSO_*, con APP_MASTER_KEY (ver nota de S02). Tests en tests/test_envfile.py: importa y limpia, el resto del .env idéntico, sin copias ni temporales, el log sin URL/token, arranque completo con TURSO en el .env. Probar: `pytest tests/test_envfile.py`. NOTA: no ejecuté nada contra el .env real del CEO (los tests corren en carpetas temporales).
 - **T13** — app/db/seed.py: `seed(db)` idempotente (INSERT OR IGNORE, una transacción) con los 4 agentes de PLAN §3 (ids slug; Sheldon is_cto=1), 4 tickets de ejemplo (uno por columna activa, sin agente asignado para mantener coherencia con R1), eventos CREATED, 1 aprobación PENDING del ticket en AWAITING_APPROVAL y 1 nota de memoria; NO crea usuarios ni credenciales. CLI: `python -m app.db.seed` (usa la bóveda). Tests: tests/test_seed.py (2 ejecuciones → 4 agentes; Sheldon CTO; sin usuarios). Probar: `pytest tests/test_seed.py`.
+
+
+---
+
+# AMPLIACIÓN 2026-11-22 (d): RUTA RÁPIDA M0 "ver datos reales" (CEO)
+
+El CEO necesita **ver los datos de la BD en el front cuanto antes** y **crear el primer agente desde cero** (la BD empieza vacía, sin datos de ejemplo). Este orden **manda sobre cualquier otro**:
+
+1. **API:** T13 (con el cambio de abajo) → T20 → T21 → T22 → T23 → T24 → C04 → T30 → T31 → T32 → T60 → T61.
+   - Mientras no exista la autenticación, la API **solo escucha en 127.0.0.1**.
+   - **S01–S10 van inmediatamente después de M0**. S09 recorre todas las rutas registradas, así que las rutas de M0 quedan cubiertas sin trabajo extra.
+2. **FRONT:** F05 → T70 → T71 → T72 → T73 → T74 → T75 → T79 → F06 → F03a.
+3. **QA de M0:** QM0.
+4. Después: S01–S10 → T40–T46 → T50–T54 → A01–A07 → C05 → F01–F03 completo → resto.
+
+Cambios de criterio:
+- **T13 (cambio):** la BD **empieza vacía**. `python -m app.db.migrate` crea solo el esquema. La semilla de los 4 agentes y los tickets de ejemplo pasa a ser **opcional** (`python -m app.db.seed --demo`) y **no se ejecuta** en el arranque, en el setup ni en el README como paso obligatorio.
+- **T75 (añadido):** se eliminan del FRONT los datos de ejemplo de agentes, tickets y aprobaciones (`INITIAL_AGENTS`, `INITIAL_TASKS`, `INITIAL_PROPOSALS`). Con la BD vacía, **cada vista muestra un estado vacío con un botón "Crear primer agente"** (que abre el `CreateAgentModal`), y nada se rompe con 0 agentes: el Kanban sin agentes no deja crear tickets y lo explica; la oficina 3D se ve vacía y sin errores; el Cerebro también.
+- **README (corrige QP1):** lista solo los comandos que existen. Los futuros van marcados "(pendiente: tarea X)". QP1 se vuelve a probar cuando esté corregido.
+
+| ID | Descripción | Responsable | Estado | Criterio de aceptación |
+|---|---|---|---|---|
+| F03a | FRONT: módulo **Administración** visible en el menú (5.º lugar) con dos pestañas operativas en M0: **Conexión BD** (estado de `GET /api/setup/status` y modo local o remoto; si hay setup pendiente, enlaza al asistente F06) y **Agentes** (lista real desde la API + crear). El resto de pestañas aparecen deshabilitadas con el texto "Disponible tras el login (S06)". Cuando exista la autenticación, el módulo pasa a ser solo para ADMIN (F03). | DEV | PENDIENTE | El menú muestra los 5 módulos en el orden de PLAN §15.1; crear un agente desde Administración lo muestra al momento en las demás vistas. |
+| QM0 | QA de M0: BD vacía en Turso o en `file:`; arrancar la API y el FRONT; asistente de setup; **crear el primer agente desde la app**; se ve en Kanban, Cerebro, 3D y Administración; recargar la página lo mantiene; ningún dato de ejemplo visible. | QA | PENDIENTE | Checklist en QA_REPORT. |

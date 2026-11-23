@@ -1004,3 +1004,11 @@ El drag & drop del Kanban (antes incluido en VUI04) se **adelanta** como tarea K
 - Al soltar en una columna: con la API conectada se llama a `PATCH /api/tickets/{id}/status`; antes de conectar, se actualiza el estado local.
 - Resaltado de la columna destino, tarjeta "fantasma" y se mantienen las flechas y la alternativa por teclado.
 - Si la API rechaza el movimiento (409/422), la tarjeta vuelve a su columna y se muestra el error.
+
+
+---
+
+## 18. Ruta rápida M0 y BD vacía (CEO 2026-11-22)
+- La BD **empieza vacía**: el primer agente se crea desde la app. La semilla de §3 pasa a ser **opcional** (`python -m app.db.seed --demo`).
+- El FRONT ya no tiene datos de ejemplo de agentes, tickets ni aprobaciones; cada vista muestra estados vacíos.
+- El orden que manda es el de TASKS "AMPLIACIÓN (d)": API mínima de agentes y SSE → FRONT conectado → Administración visible (F03a) → seguridad S01–S10 inmediatamente después (API solo en 127.0.0.1 mientras tanto).
