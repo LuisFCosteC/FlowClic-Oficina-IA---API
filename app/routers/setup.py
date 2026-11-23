@@ -27,8 +27,8 @@ LOCAL_HOSTS = {"127.0.0.1", "::1"}
 
 class SetupStatus(CamelModel):
     setup_required: bool
-    has_database: bool
-    has_admin: bool
+    has_database: bool | None = None
+    has_admin: bool | None = None
 
 
 class SetupDatabaseBody(StrictInput):
@@ -100,11 +100,20 @@ def _ensure_open(request: Request) -> SetupStatus:
     return status
 
 
-@router.get("/status", summary="Estado del asistente de primer arranque")
+@router.get(
+    "/status",
+    summary="Estado del asistente de primer arranque",
+    description=(
+        "Abierto (solo desde localhost): `setupRequired`, `hasDatabase` y `hasAdmin`. "
+        'Cerrado: únicamente `{"setupRequired": false}`, sin exigir localhost.'
+    ),
+    response_model_exclude_none=True,
+)
 def setup_status(request: Request) -> SetupStatus:
     status = _status()
-    if status.setup_required:  # abierto: solo desde localhost
-        _require_local(request)
+    if not status.setup_required:  # cerrado: no revela nada más
+        return SetupStatus(setup_required=False)
+    _require_local(request)
     return status
 
 

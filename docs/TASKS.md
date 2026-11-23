@@ -360,7 +360,7 @@ CREATE INDEX ix_agent_messages_agent ON agent_messages(agent_id, created_at);
 
 | ID | Descripción | Responsable | Estado | Criterio de aceptación |
 |---|---|---|---|---|
-| H01 | API: migración 006 + `GET /api/messages?agentId=&scope=&limit=` (mensajes + eventos de ticket del agente, combinados por fecha) + `POST /api/messages` + evento SSE `message.created` + `GET /api/agents/{id}/status-summary` ("qué hace / qué le falta"). Las órdenes globales se dirigen a Sheldon. | DEV | PENDIENTE | Tests: VIEWER → 403 en POST; body > 2000 → 400; una orden global aparece en el hilo de Sheldon; `status-summary` refleja el ticket actual y el siguiente paso. |
+| H01 | API: migración 006 + `GET /api/messages?agentId=&scope=&limit=` (mensajes + eventos de ticket del agente, combinados por fecha) + `POST /api/messages` + evento SSE `message.created` + `GET /api/agents/{id}/status-summary` ("qué hace / qué le falta"). Las órdenes globales se dirigen a Sheldon. | DEV | EN CURSO | Tests: VIEWER → 403 en POST; body > 2000 → 400; una orden global aparece en el hilo de Sheldon; `status-summary` refleja el ticket actual y el siguiente paso. |
 | H02 | FRONT: panel derecho de la Oficina 3D (sustituye a la barra inferior), con cámara renombrada, selector global/individual, tarjeta de estado, hilo, caja de órdenes y atajos; se pliega; tiempo real por SSE. Se elimina "Simular recorrido". | DEV | PENDIENTE | Enviar una orden la muestra al instante en otra pestaña; "Pausar" pone al agente en SLEEP_QUOTA y lo mueve a la Zona de descanso; con el panel plegado el 3D ocupa todo el ancho. |
 | QH1 | QA del panel de mando: órdenes globales e individuales, permisos, XSS en el texto, tiempo real, atajos. | QA | PENDIENTE | Resultados en QA_REPORT. |
 

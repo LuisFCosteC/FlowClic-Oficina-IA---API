@@ -139,9 +139,9 @@ def test_flujo_completo_bd_admin_y_cierre(env: Env) -> None:
     for path, body in bodies:
         closed = env.local.post(path, json=body)
         assert closed.status_code == 404
-    status = env.remote.get("/api/setup/status")
+    status = env.remote.get("/api/setup/status")  # cerrado: sin exigir localhost
     assert status.status_code == 200
-    assert status.json()["setupRequired"] is False
+    assert status.json() == {"setupRequired": False}  # y sin hasDatabase/hasAdmin
 
 
 def test_admin_antes_de_la_bd_409(env: Env) -> None:
