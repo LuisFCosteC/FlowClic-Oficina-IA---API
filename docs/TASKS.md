@@ -10,6 +10,21 @@ Cada tarea de DEV pasa a `EN QA`; QA la verifica contra su criterio y la marca `
 > Regla desde ahora: toda ruta nueva usa `requireRole(...)` y su test cubre 401 y 403. Sin dependencias nuevas: todo con `node:crypto`.
 > Senior: termina T30 (en curso) y después pasa a S01.
 
+> **⚠ CAMBIO DE STACK (CEO, 2026-11-22): la API pasa a Python + FastAPI con Swagger (PLAN §0).**
+> - La versión Node (T01–T30, S01, S02 y S03 empezada) queda archivada en la rama `archive/node-express`. **No se prueba ni se sigue.**
+> - T02, T10–T14, T20–T24, T30, S01, S02 y S03 vuelven a `PENDIENTE` para **reimplementarse en Python con los mismos criterios de aceptación**, traducidos con la tabla de PLAN §0.4 (zod → Pydantic, `node:test` → pytest, `npm run` → comandos de §0.6…). T01 queda sustituida por P01.
+> - Las notas DEV de la versión Node que hay más abajo son históricas.
+> - Orden: **P00 → P01 →** T02 → T10–T14 → T20–T24 → T30 → y después PLAN §14 desde el punto 2.
+
+## Bloque P: arranque Python (va antes que todo)
+
+| ID | Descripción | Responsable | Estado | Criterio de aceptación |
+|---|---|---|---|---|
+| P00 | Prueba técnica en Windows: crear `.venv` con `py -3.13`, instalar `libsql`, y con un script desechable (no se commitea): conectar a `file:local.db`, crear una tabla, ejecutar una transacción con rollback, un insert parametrizado y una lectura. Si `libsql` falla, repetir con `sqlite3` y anotar el resultado como PREGUNTA PARA ARQUITECTO. **Si Python 3.13 no está instalado, parar y preguntar** (no instalar nada sin OK). | DEV | PENDIENTE | Nota en TASKS con: versión de Python, versión de `libsql`, resultado de cada operación y si el rollback deshace correctamente. |
+| P01 | Scaffold Python en `dev`: borrar el código Node (`src/`, `test/`, `seeds/`, `scripts/` de Node, `package.json`, `package-lock.json`, `tsconfig.json`, `node_modules/`); conservar `docs/` y `migrations/`; crear la estructura de PLAN §0.5, `requirements.txt` y `requirements-dev.txt` con versiones exactas (solo los paquetes de §0.2), `pyproject.toml` (ruff, mypy, pytest), `.gitignore` de Python, `.env.example` con las variables de §9, §12.5 y §0.8, y `app/main.py` con `create_app()` y `/docs` activo. Actualizar el `README.md` con los comandos de §0.6. | DEV | PENDIENTE | En una copia nueva: `py -3.13 -m venv .venv`, `pip install -r requirements.txt -r requirements-dev.txt`, `uvicorn app.main:app` arranca y `http://localhost:4000/docs` muestra Swagger; `ruff check .` y `mypy app` pasan; `pytest` corre (aunque sea con 1 test); no queda ningún archivo Node. |
+| P02 | Calidad de la documentación Swagger (transversal): cada router con `tags` y `summary`; cada endpoint con `responses` de error documentados; modelos con `json_schema_extra` de ejemplo; `APIKeyCookie('fc_session')` como esquema de seguridad; `DOCS_ENABLED` respetado. Se cumple en **cada** tarea que añada rutas; esta tarea es la revisión final. | DEV | PENDIENTE | En `/docs` todos los endpoints aparecen agrupados, con ejemplos y errores; con `DOCS_ENABLED=false`, `/docs`, `/redoc` y `/openapi.json` → 404. |
+| QP1 | QA del arranque Python: seguir el README desde cero en una carpeta limpia; Swagger visible; `pip-audit` sin vulnerabilidades altas. | QA | PENDIENTE | Pasos y resultados en QA_REPORT. |
+
 ---
 
 ## Bloque 0 — Preparación
@@ -17,36 +32,36 @@ Cada tarea de DEV pasa a `EN QA`; QA la verifica contra su criterio y la marca `
 | ID | Descripción | Responsable | Estado | Criterio de aceptación |
 |---|---|---|---|---|
 | T00 | (Tras OK del CEO) `git init` en API y FRONT, commit inicial en `main` con el estado actual, crear y usar rama `dev`. | DEV | HECHO | `git branch` muestra `main` y `dev` en ambos; `dev` activa; el commit inicial del FRONT no incluye `node_modules` ni `.env*`. |
-| T01 | Scaffold API: `package.json` (`"type":"module"`, `engines.node >=24`), scripts de PLAN §9, `tsconfig.json` (noEmit, `allowImportingTsExtensions`, `verbatimModuleSyntax`), `.gitignore`, `.env.example`. Instalar solo deps de PLAN §8. | DEV | EN QA | `npm install` sin errores; `npm run typecheck` pasa; `.env` y `local.db*` ignorados por git; no hay deps fuera de la lista. |
-| T02 | `src/config/env.ts`: carga y valida variables con zod (`PORT`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` opcional, `CORS_ORIGIN`, `ORCHESTRATOR` = `noop`). | DEV | EN QA | Sin `TURSO_DATABASE_URL` el proceso termina con mensaje claro y código ≠ 0; con valores válidos exporta objeto tipado. |
+| T01 | Scaffold API: `package.json` (`"type":"module"`, `engines.node >=24`), scripts de PLAN §9, `tsconfig.json` (noEmit, `allowImportingTsExtensions`, `verbatimModuleSyntax`), `.gitignore`, `.env.example`. Instalar solo deps de PLAN §8. | DEV | PENDIENTE | `npm install` sin errores; `npm run typecheck` pasa; `.env` y `local.db*` ignorados por git; no hay deps fuera de la lista. |
+| T02 | `src/config/env.ts`: carga y valida variables con zod (`PORT`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` opcional, `CORS_ORIGIN`, `ORCHESTRATOR` = `noop`). | DEV | PENDIENTE | Sin `TURSO_DATABASE_URL` el proceso termina con mensaje claro y código ≠ 0; con valores válidos exporta objeto tipado. |
 | T03 | QA: verificar arranque limpio del scaffold en una copia nueva (clonar `dev`, `npm install`, `npm run typecheck`). | QA | PENDIENTE | Pasos reproducibles anotados en `QA_REPORT.md`; sin rutas absolutas (`grep -rn "D:\\\\\|C:\\\\" src seeds migrations` vacío). |
 
 ## Bloque 1 — Base de datos
 
 | ID | Descripción | Responsable | Estado | Criterio de aceptación |
 |---|---|---|---|---|
-| T10 | `src/db/client.ts`: cliente único `@libsql/client` con URL y token del env. | DEV | EN QA | Funciona con `file:local.db`; con `TURSO_AUTH_TOKEN` vacío no se envía token. |
-| T11 | `src/db/migrate.ts`: runner con tabla `schema_migrations`, aplica `migrations/NNN_*.sql` en orden, cada una en transacción; usable como CLI y como función (tests). | DEV | EN QA | 1ª ejecución aplica todo; 2ª no hace nada; una migración con SQL roto no queda registrada ni deja tablas parciales. |
-| T12 | `migrations/001_init.sql` con el esquema exacto de PLAN §3 (CHECKs e índices incluidos). | DEV | EN QA | Insertar `status='FOO'` en agents/tickets/approvals falla; 2 aprobaciones PENDING para el mismo ticket fallan por índice único. |
-| T13 | `seeds/seed.ts` idempotente: 4 agentes (ids `sheldon`, `leonard`, `penny`, `raj` con datos de PLAN §3), 3–4 tickets de ejemplo, 1 nota de memoria. | DEV | EN QA | Ejecutar 2 veces deja exactamente 4 agentes; Sheldon `isCto=1`. |
-| T14 | Script `db:reset` que borra la BD local y re-ejecuta migrate + seed; se niega si la URL no empieza por `file:`. | DEV | EN QA | Con URL `libsql://...` termina sin borrar nada y con mensaje claro. |
+| T10 | `src/db/client.ts`: cliente único `@libsql/client` con URL y token del env. | DEV | PENDIENTE | Funciona con `file:local.db`; con `TURSO_AUTH_TOKEN` vacío no se envía token. |
+| T11 | `src/db/migrate.ts`: runner con tabla `schema_migrations`, aplica `migrations/NNN_*.sql` en orden, cada una en transacción; usable como CLI y como función (tests). | DEV | PENDIENTE | 1ª ejecución aplica todo; 2ª no hace nada; una migración con SQL roto no queda registrada ni deja tablas parciales. |
+| T12 | `migrations/001_init.sql` con el esquema exacto de PLAN §3 (CHECKs e índices incluidos). | DEV | PENDIENTE | Insertar `status='FOO'` en agents/tickets/approvals falla; 2 aprobaciones PENDING para el mismo ticket fallan por índice único. |
+| T13 | `seeds/seed.ts` idempotente: 4 agentes (ids `sheldon`, `leonard`, `penny`, `raj` con datos de PLAN §3), 3–4 tickets de ejemplo, 1 nota de memoria. | DEV | PENDIENTE | Ejecutar 2 veces deja exactamente 4 agentes; Sheldon `isCto=1`. |
+| T14 | Script `db:reset` que borra la BD local y re-ejecuta migrate + seed; se niega si la URL no empieza por `file:`. | DEV | PENDIENTE | Con URL `libsql://...` termina sin borrar nada y con mensaje claro. |
 | T15 | QA: probar migrate/seed/reset y CHECKs con `local.db`; documentar en QA_REPORT. | QA | PENDIENTE | Todos los criterios T11–T14 verificados manualmente. |
 
 ## Bloque 2 — Núcleo de la API
 
 | ID | Descripción | Responsable | Estado | Criterio de aceptación |
 |---|---|---|---|---|
-| T20 | `src/app.ts` + `src/server.ts`: Express, `cors` con `CORS_ORIGIN`, JSON body, `GET /api/health` (hace `SELECT 1`). `app.ts` exporta la app sin escuchar. | DEV | EN QA | `curl localhost:4000/api/health` → `{"ok":true,"db":"up",...}`; petición desde otro origen bloqueada por CORS. |
-| T21 | `middleware/errors.ts`: formato de error único de PLAN §5; errores zod → 400 con `details`; rutas inexistentes → 404 JSON; 500 sin stack. | DEV | EN QA | Body inválido devuelve 400 con forma `{error:{code,message,details}}`. |
-| T22 | `domain/types.ts` y `domain/schemas.ts`: DTOs de PLAN §6 (uniones de string, sin `enum`) y esquemas zod de entrada. | DEV | EN QA | `npm run typecheck` pasa; no hay `enum` en el código. |
-| T23 | `events/bus.ts`: bus tipado de `DomainEvent` (tipos de la tabla SSE de PLAN §6). | DEV | EN QA | Test unitario: un suscriptor recibe el evento emitido con su payload tipado. |
-| T24 | Infra de tests: helper que crea BD temporal en `os.tmpdir()`, migra, siembra, levanta la app en puerto efímero y la cierra. | DEV | EN QA | `npm test` corre un test de `/api/health` en verde y no crea/modifica `local.db`. |
+| T20 | `src/app.ts` + `src/server.ts`: Express, `cors` con `CORS_ORIGIN`, JSON body, `GET /api/health` (hace `SELECT 1`). `app.ts` exporta la app sin escuchar. | DEV | PENDIENTE | `curl localhost:4000/api/health` → `{"ok":true,"db":"up",...}`; petición desde otro origen bloqueada por CORS. |
+| T21 | `middleware/errors.ts`: formato de error único de PLAN §5; errores zod → 400 con `details`; rutas inexistentes → 404 JSON; 500 sin stack. | DEV | PENDIENTE | Body inválido devuelve 400 con forma `{error:{code,message,details}}`. |
+| T22 | `domain/types.ts` y `domain/schemas.ts`: DTOs de PLAN §6 (uniones de string, sin `enum`) y esquemas zod de entrada. | DEV | PENDIENTE | `npm run typecheck` pasa; no hay `enum` en el código. |
+| T23 | `events/bus.ts`: bus tipado de `DomainEvent` (tipos de la tabla SSE de PLAN §6). | DEV | PENDIENTE | Test unitario: un suscriptor recibe el evento emitido con su payload tipado. |
+| T24 | Infra de tests: helper que crea BD temporal en `os.tmpdir()`, migra, siembra, levanta la app en puerto efímero y la cierra. | DEV | PENDIENTE | `npm test` corre un test de `/api/health` en verde y no crea/modifica `local.db`. |
 
 ## Bloque 3 — Agentes
 
 | ID | Descripción | Responsable | Estado | Criterio de aceptación |
 |---|---|---|---|---|
-| T30 | `repositories/agents.repo.ts`: list (excluye archivados salvo flag), get, insert, update, setStatus, archive; mapea snake_case ⇄ camelCase y `avatar` JSON. | DEV | EN QA | Tests de repo en verde. |
+| T30 | `repositories/agents.repo.ts`: list (excluye archivados salvo flag), get, insert, update, setStatus, archive; mapea snake_case ⇄ camelCase y `avatar` JSON. | DEV | PENDIENTE | Tests de repo en verde. |
 | T31 | `services/agents.service.ts` + rutas `GET/POST/PATCH/DELETE /api/agents` y `GET /api/agents/:id`. Nombre único entre activos (409). DELETE archiva; 409 si tiene tickets no DONE o aprobaciones PENDING. | DEV | PENDIENTE | Crear agente "Howard" desde curl lo devuelve en `GET /api/agents` sin tocar código; duplicar nombre → 409; borrar agente con ticket abierto → 409. |
 | T32 | `PATCH /api/agents/:id/status`: cambio manual a cualquiera de los 5 estados; IDLE pone `currentTask=null`. Emite `agent.updated`. | DEV | PENDIENTE | Los 5 estados aceptados; `"FOO"` → 400; evento emitido (test con bus). |
 | T33 | QA: probar CRUD y estados de agentes con curl/Postman; casos de error (400/404/409). | QA | PENDIENTE | Matriz de casos en QA_REPORT con resultado. |
@@ -136,9 +151,9 @@ Después de T80: el Arquitecto revisa el código, este archivo y `QA_REPORT.md`,
 
 | ID | Descripción | Responsable | Estado | Criterio de aceptación |
 |---|---|---|---|---|
-| S01 | Endurecimiento HTTP: `app.disable('x-powered-by')`, cabeceras (CSP `default-src 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`), `express.json({limit:'100kb'})`, `HOST` (por defecto `127.0.0.1`) en `listen`, `requestId` en logs. `/api/health` sin sesión responde **solo** `{ok}`; con sesión, el detalle actual. | DEV | EN QA | `curl -i` muestra las cabeceras y no `X-Powered-By`; body de 200 kB → 413 JSON; la API no responde desde otra IP de la red local. |
-| S02 | `npm run setup`: crea `.env` desde `.env.example` si no existe y rellena `APP_ENCRYPTION_KEY` y `SESSION_SECRET` con `crypto.randomBytes(32)` en base64. Nunca sobrescribe un `.env` existente. Añadir las variables de PLAN §12.5 a `.env.example` (vacías) y validarlas en `env.ts` (en `production` deben estar definidas). Añadir `backups/` y `.env.bak` a `.gitignore`. | DEV | EN QA | Ejecutarlo dos veces no cambia el `.env`; ningún valor real en `.env.example`. |
-| S03 | `migrations/002_security.sql` con el esquema exacto de PLAN §12.2. | DEV | PENDIENTE | `db:migrate` la aplica; el email está repetido → falla por índice único. |
+| S01 | Endurecimiento HTTP: `app.disable('x-powered-by')`, cabeceras (CSP `default-src 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`), `express.json({limit:'100kb'})`, `HOST` (por defecto `127.0.0.1`) en `listen`, `requestId` en logs. `/api/health` sin sesión responde **solo** `{ok}`; con sesión, el detalle actual. | DEV | PENDIENTE | `curl -i` muestra las cabeceras y no `X-Powered-By`; body de 200 kB → 413 JSON; la API no responde desde otra IP de la red local. |
+| S02 | `npm run setup`: crea `.env` desde `.env.example` si no existe y rellena `APP_ENCRYPTION_KEY` y `SESSION_SECRET` con `crypto.randomBytes(32)` en base64. Nunca sobrescribe un `.env` existente. Añadir las variables de PLAN §12.5 a `.env.example` (vacías) y validarlas en `env.ts` (en `production` deben estar definidas). Añadir `backups/` y `.env.bak` a `.gitignore`. | DEV | PENDIENTE | Ejecutarlo dos veces no cambia el `.env`; ningún valor real en `.env.example`. |
+| S03 | `migrations/002_security.sql` con el esquema exacto de PLAN §12.2. | DEV | EN QA | `db:migrate` la aplica; el email está repetido → falla por índice único. |
 | S04 | `src/security/password.ts`: `hashPassword` y `verifyPassword` con scrypt (N=2^17, r=8, p=1, sal de 16 B, `maxmem` ajustado), formato `scrypt$N$r$p$salt$hash`, comparación con `timingSafeEqual`. Política: mínimo 12 caracteres. | DEV | PENDIENTE | Tests: el hash ≠ la contraseña; dos hashes de la misma clave son distintos; verificar la buena es true y la mala false. |
 | S05 | `npm run admin:create`: CLI que pide email, nombre y contraseña (dos veces, sin eco) y crea un usuario ADMIN. **No existe usuario por defecto**; la semilla no crea usuarios. | DEV | PENDIENTE | `grep -rni "password" seeds/` no encuentra credenciales; el usuario creado tiene un hash `scrypt$...`. |
 | S06 | Sesiones (`src/security/sessions.ts`) + rutas `/api/auth/login`, `logout`, `logout-all`, `me`, `me/password`, `me/sessions` (PLAN §12.4): token de 32 B en una cookie `fc_session` `HttpOnly; SameSite=Strict; Path=/api` (+`Secure` si `NODE_ENV=production`); en la BD solo el SHA-256. Expira por inactividad (`SESSION_IDLE_MINUTES`) y por tiempo absoluto (`SESSION_MAX_HOURS`). Cambiar la contraseña revoca las demás sesiones. | DEV | PENDIENTE | Tests: login OK pone la cookie; con la sesión caducada (reloj simulado) → 401; tras logout el mismo token → 401; la tabla no contiene el token en claro. |
@@ -184,3 +199,4 @@ Después de T80: el Arquitecto revisa el código, este archivo y `QA_REPORT.md`,
 | QS5 | Revisión periódica (al cerrar la fase): `npm run audit` en ambos repos sin altas/críticas, `check-secrets` sobre todo el historial (`git log -p`), cabeceras de seguridad, errores 500 sin stack ni rutas, `HOST` local. | QA | PENDIENTE | Informe en QA_REPORT; cada hallazgo alto se convierte en tarea. |
 - **S01** — middleware/security.ts (requestId + cabeceras CSP default-src 'none', nosniff, no-referrer, X-Frame-Options DENY), x-powered-by off, express.json 100kb (413 PAYLOAD_TOO_LARGE), HOST (def. 127.0.0.1) en env.ts/server.ts/.env.example, errores 500 logueados con requestId. /api/health ahora responde solo {ok:true}; el detalle con sesión se añade en S09 (cuando exista requireAuth). Tests en test/health.test.ts. Probar: `curl -i localhost:4000/api/health`; `npm test`.
 - **S02** — `npm run setup` (scripts/setup.ts): crea .env desde .env.example con APP_ENCRYPTION_KEY y SESSION_SECRET aleatorios (32 B base64); nunca sobrescribe. .env.example con variables de PLAN §12.5 (secretos vacíos); config/parse.ts (zod: en production exigen claves; APP_ENCRYPTION_KEY debe ser 32 B; vacío = no definida) y config/env.ts (carga y sale con exit 1). .gitignore + backups/ y .env.bak. Tests: test/env-setup.test.ts. Probar: `npm run setup` dos veces (la 2ª no cambia el .env); `npm test`.
+- **S03** — migrations/002_security.sql con users, sessions y audit_log exactos de PLAN §12.2. Test: test/security-schema.test.ts (email repetido → UNIQUE, rol inválido → CHECK, semilla sin usuarios). Probar: `npm run db:migrate`; `npm test`.
