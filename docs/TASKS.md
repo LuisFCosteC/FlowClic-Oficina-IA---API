@@ -1,6 +1,6 @@
 # FlowClic Oficina IA — Tareas Fase 1
 
-Referencia: `docs/PLAN.md`. Estados: `PENDIENTE` · `EN CURSO` · `EN QA` · `HECHO` · `DEVUELTA`.
+Referencia: `docs/PLAN.md`. Estados: `PENDIENTE` · `EN CURSO` · `EN QA` · `EN REVISIÓN` · `HECHO` · `DEVUELTA`. **Equipo desde 2026-11-22: Junior A (DEV), Junior QA (QA), Claude = revisores (ver "AMPLIACIÓN (g)" al final).**
 Reglas: rama `dev`; sin rutas absolutas en código; preguntar antes de añadir dependencias no listadas en PLAN §8.
 Si hay una duda, añade debajo de la tarea una línea `> PREGUNTA PARA ARQUITECTO: ...` y sigue con otra tarea.
 Cada tarea de DEV pasa a `EN QA`; QA la verifica contra su criterio y la marca `HECHO` o `DEVUELTA` (con detalle en `docs/QA_REPORT.md`).
@@ -61,7 +61,7 @@ Cada tarea de DEV pasa a `EN QA`; QA la verifica contra su criterio y la marca `
 
 | ID | Descripción | Responsable | Estado | Criterio de aceptación |
 |---|---|---|---|---|
-| T30 | `repositories/agents.repo.ts`: list (excluye archivados salvo flag), get, insert, update, setStatus, archive; mapea snake_case ⇄ camelCase y `avatar` JSON. | DEV | PENDIENTE | Tests de repo en verde. |
+| T30 | `repositories/agents.repo.ts`: list (excluye archivados salvo flag), get, insert, update, setStatus, archive; mapea snake_case ⇄ camelCase y `avatar` JSON. | DEV | EN CURSO | Tests de repo en verde. |
 | T31 | `services/agents.service.ts` + rutas `GET/POST/PATCH/DELETE /api/agents` y `GET /api/agents/:id`. Nombre único entre activos (409). DELETE archiva; 409 si tiene tickets no DONE o aprobaciones PENDING. | DEV | PENDIENTE | Crear agente "Howard" desde curl lo devuelve en `GET /api/agents` sin tocar código; duplicar nombre → 409; borrar agente con ticket abierto → 409. |
 | T32 | `PATCH /api/agents/:id/status`: cambio manual a cualquiera de los 5 estados; IDLE pone `currentTask=null`. Emite `agent.updated`. | DEV | PENDIENTE | Los 5 estados aceptados; `"FOO"` → 400; evento emitido (test con bus). |
 | T33 | QA: probar CRUD y estados de agentes con curl/Postman; casos de error (400/404/409). | QA | PENDIENTE | Matriz de casos en QA_REPORT con resultado. |
@@ -128,7 +128,6 @@ Después de T80: el Arquitecto revisa el código, este archivo y `QA_REPORT.md`,
 ## Notas DEV
 
 - **T01** — Scaffold API: package.json (scripts PLAN §9), tsconfig, .gitignore, .env.example, deps solo de PLAN §8 (express@4, @types/express@4). Archivos: package.json, package-lock.json, tsconfig.json, .gitignore, .env.example, src/server.ts (placeholder). Probar: `npm install && npm run typecheck`.
-- **T30** — repositories/agents.repo.ts (list con flag includeArchived, get, findActiveAgentByName, insert, update parcial, setStatus, archive; snake_case⇄camelCase y avatar JSON) + repositories/util.ts (Executor = Client|Transaction, buildUpdate). Tests: test/agents.repo.test.ts. Probar: `npm test`.
 > PREGUNTA PARA ARQUITECTO (T31/T32 y siguientes): `docs/PLAN.md` fue ampliado hoy (§12 seguridad, §13 Administración, §14 nuevo orden: S01→S10 antes de T30/T31) pero esta lista no contiene las tareas S*, A*, F* ni QS*. Sin sus definiciones no puedo implementarlas, y §14 exige `requireRole` en toda ruta nueva, así que T31/T32 (rutas de agentes) quedan en pausa hasta tener S01–S10. Esos cambios de PLAN.md siguen sin commitear en el working tree de la API; no los incluí en mis commits.
 > RESPUESTA DEL ARQUITECTO (2026-11-22): las tareas S01-S13, A01-A07, F01-F05 y QS ya están definidas al final de este archivo, y PLAN.md está commiteado (462aed8). La pausa de T31/T32 es correcta: sigue el orden S01→S10 y después retoma T31/T32 ya con requireAuth/requireRole. T30 (repositorio, sin rutas) puede pasar a EN QA tal cual.
 
@@ -304,7 +303,7 @@ Cambios de criterio:
 
 | ID | Descripción | Responsable | Estado | Criterio de aceptación |
 |---|---|---|---|---|
-| G01 | Esquema: corregir `001_init.sql` (estados de ticket de §19.4 y `approvals.gate` 1..4) + `005_agent_profiles.sql` (campos de §19.1). Actualizar los tests de esquema. | DEV | PENDIENTE | `status='AWAITING_APPROVAL'` → falla el CHECK; `gate=5` → falla; los tests de esquema pasan. |
+| G01 | Esquema: corregir `001_init.sql` (estados de ticket de §19.4 y `approvals.gate` 1..4) + `005_agent_profiles.sql` (campos de §19.1). Actualizar los tests de esquema. | DEV | EN CURSO | `status='AWAITING_APPROVAL'` → falla el CHECK; `gate=5` → falla; los tests de esquema pasan. |
 | G02 | `app/domain/agent_policy.py` (GLOBAL_RESTRICTIONS, lista cerrada de acciones, acciones prohibidas, validación de permisos por `role_type`) + `models_catalog.py` + generación de `system_prompt` en el servidor. | DEV | PENDIENTE | Tests: un permiso `git.merge_main` → 422; `approvals.create` en un DEV → 422; el prompt siempre contiene las 5 globales aunque el cliente envíe otras; acción desconocida → 400. |
 | G03 | `app/domain/agent_templates.py` con los 4 perfiles **exactos** del CEO (funciones, reglas, restricciones, permisos, modelo, límites de §19.6) + `GET /api/agent-templates` + seed `--agents` y endpoint "Cargar equipo base" (ADMIN, idempotente). | DEV | PENDIENTE | Las plantillas reproducen literalmente el texto del CEO; cargar el equipo dos veces deja 4 agentes. |
 | G04 | `AgentGuard`: `record_failure` / `record_success` (BLOCKED al 3.º fallo seguido), `check_budget`; `POST /api/agents/{id}/failures` solo ADMIN (pruebas Fase 1); auditoría y evento SSE. | DEV | PENDIENTE | 3 fallos seguidos → BLOCKED y evento; un éxito intermedio reinicia el contador. |
@@ -316,3 +315,56 @@ Cambios de criterio:
 | QG1 | QA de perfiles y flujo: globales inviolables (API y UI), matriz de transiciones completa (incluido `actingAgentId`), bloqueo por fallos, compuertas, plantillas literales. | QA | PENDIENTE | Matriz en QA_REPORT. |
 | QS0 | **Auditoría inicial de seguridad AHORA** sobre el código actual de `dev` (API y FRONT): los 19 hallazgos con los 5 campos de `docs/SECURITY_FINDINGS.md` + resultado (CUMPLE / NO CUMPLE / PENDIENTE DE IMPLEMENTAR / N/A) + vector CVSS si hay una instancia real + evidencia sin secretos. Es la línea base contra la que se medirán QS1–QS5. | QA | PENDIENTE | Sección "Auditoría de seguridad — línea base" en QA_REPORT con los 19 puntos completos. |
 - **C04** — Modo SETUP (PLAN §16.3): app/security/setup_gate.py (código XXXX-XXXX-XXXX sin caracteres ambiguos, impreso SOLO en la consola, caduca a los 30 min, 5 fallos lo queman y se emite otro, comparación en tiempo constante, mensaje idéntico en todo fallo), app/services/setup_service.py (validar esquema file:/libsql:///https://, probar conexión con timeout 5 s, migrar, crear primer ADMIN con scrypt; los mensajes y logs NO incluyen la URL ni el token), app/routers/setup.py (`GET /api/setup/status`, `POST /api/setup/database`, `POST /api/setup/admin`: solo localhost → 403 desde otra IP, sin/mal código → 403, BD ya configurada → 409, admin antes de la BD → 409), app/middleware.py (sin BD solo responden /api/health y /api/setup/*; el resto 503 `SETUP_REQUIRED`, ASGI puro), create_app(settings, db, vault): al arrancar abre la bóveda, conecta con la BD guardada o entra en modo SETUP; `health` responde `db:"setup"` en ese modo. Decisión a confirmar (PREGUNTA PARA ARQUITECTO, no bloquea): al cerrarse el asistente (BD + ADMIN) los POST devuelven 404 pero `GET /api/setup/status` sigue devolviendo 200 con setupRequired=false (el front lo necesita para saber que no hay asistente; no revela nada); abierto, el status también es solo localhost. Tests: tests/test_setup.py (17: 503 en modo setup, 403 sin código/IP no local, flujo completo + cierre 404, URL inválida/inalcanzable sin guardar ni filtrar secretos, token cifrado en la bóveda, 5 intentos queman el código, caducidad a 30 min). Probar: `pytest tests/test_setup.py`; arrancar con bóveda vacía y ver el código en la consola.
+
+
+---
+
+# AMPLIACIÓN 2026-11-22 (g): Panel de chat del 3D y cambio de equipo
+
+## Cambio de equipo (CEO)
+- **Junior A** (DEV) implementa y **Junior QA** (QA) prueba. Los antiguos Senior y QA (Claude) pasan a **REVISORES**: no implementan; validan el trabajo de los junior.
+- Flujo de cada tarea: **Junior A** `EN CURSO → EN QA` → **Junior QA** `EN QA → EN REVISIÓN` (o `DEVUELTA`) → **Revisor Claude** `EN REVISIÓN → HECHO` (o `DEVUELTA`, con el motivo bajo la tarea).
+- Se añade el estado `EN REVISIÓN` a las tareas de este archivo. Una tarea solo es `HECHO` cuando un revisor la valida.
+- Antes de parar, cada sesión anterior escribe su traspaso en la sección "TRASPASO" del final de este archivo.
+
+## Panel derecho de la Oficina 3D: chat de mando (CEO)
+La barra inferior actual (cámara, "Simular recorrido", selector de agente y botones de zona) **se sustituye** por un **panel lateral derecho** plegable (≈380 px) con:
+1. **Cámara** (parte superior compacta): Vista general · Laboratorio · Oficina de Sheldon · Zona de descanso · restablecer. Se elimina "Simular recorrido completo".
+2. **Selector de destinatario:** "Todo el equipo (global)" o un agente concreto (con avatar y `StatusPill`).
+3. **Tarjeta "Qué está haciendo / qué le falta"** del agente seleccionado (o resumen del equipo en modo global), calculada a partir de los datos reales: ticket actual, estado, tiempo en ese estado, criterio de aceptación pendiente, si está bloqueado (motivo), aprobaciones pendientes y siguiente paso según el flujo (§19.4).
+4. **Hilo de chat:** mensajes del CEO + eventos del agente (cambios de ticket y de estado, desde `ticket_events`) + respuestas de los agentes (Fase 2).
+5. **Caja de órdenes:** texto + tipo (Orden · Pregunta · Nota). Atajos: "Continuar", "Pausar" (→ SLEEP_QUOTA), "Reanudar", "Prioridad alta".
+
+**Reglas (coherentes con las restricciones globales):**
+- Las **órdenes globales van a Sheldon** (CTO), que las reparte. Las individuales van al agente, con copia visible para Sheldon.
+- **Solo Sheldon responde en conversación** (restricción global 4). Los demás agentes solo aportan eventos de estado.
+- **En la Fase 1 no hay IA:** la orden se guarda con estado `PENDIENTE` y se muestra "Se ejecutará cuando se conecte el orquestador (Fase 2)". Los atajos que cambian el estado del agente sí actúan ya, a través de la API (cambio de estado o transición válida).
+- Permisos: ADMIN y OPERATOR envían; VIEWER solo lee. Texto máximo de 2 000 caracteres, guardado como texto y nunca renderizado como HTML.
+
+**Datos:** `migrations/006_agent_messages.sql`:
+```sql
+CREATE TABLE agent_messages (
+  id         TEXT PRIMARY KEY,
+  scope      TEXT NOT NULL CHECK (scope IN ('GLOBAL','AGENT')),
+  agent_id   TEXT REFERENCES agents(id),          -- NULL si GLOBAL
+  author_type TEXT NOT NULL CHECK (author_type IN ('HUMAN','AGENT','SYSTEM')),
+  author_id  TEXT NOT NULL,
+  kind       TEXT NOT NULL CHECK (kind IN ('ORDER','QUESTION','NOTE','STATUS','REPLY')),
+  body       TEXT NOT NULL,
+  status     TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','ACK','DONE','REJECTED')),
+  ticket_id  TEXT REFERENCES tickets(id),
+  created_at TEXT NOT NULL
+);
+CREATE INDEX ix_agent_messages_agent ON agent_messages(agent_id, created_at);
+```
+
+| ID | Descripción | Responsable | Estado | Criterio de aceptación |
+|---|---|---|---|---|
+| H01 | API: migración 006 + `GET /api/messages?agentId=&scope=&limit=` (mensajes + eventos de ticket del agente, combinados por fecha) + `POST /api/messages` + evento SSE `message.created` + `GET /api/agents/{id}/status-summary` ("qué hace / qué le falta"). Las órdenes globales se dirigen a Sheldon. | DEV | PENDIENTE | Tests: VIEWER → 403 en POST; body > 2000 → 400; una orden global aparece en el hilo de Sheldon; `status-summary` refleja el ticket actual y el siguiente paso. |
+| H02 | FRONT: panel derecho de la Oficina 3D (sustituye a la barra inferior), con cámara renombrada, selector global/individual, tarjeta de estado, hilo, caja de órdenes y atajos; se pliega; tiempo real por SSE. Se elimina "Simular recorrido". | DEV | PENDIENTE | Enviar una orden la muestra al instante en otra pestaña; "Pausar" pone al agente en SLEEP_QUOTA y lo mueve a la Zona de descanso; con el panel plegado el 3D ocupa todo el ancho. |
+| QH1 | QA del panel de mando: órdenes globales e individuales, permisos, XSS en el texto, tiempo real, atajos. | QA | PENDIENTE | Resultados en QA_REPORT. |
+
+**Orden actualizado (prioridad del CEO: que se vea el cambio visual del 3D):** terminar lo que está EN CURSO (T30, G01) → **V3D02 (rótulos) → H01 → H02 → V3D03 → V3D04 → V3D05 → V3D06 → V3D01 → V3D07** → después continúa la ruta M0 (G02, G03, T31…). V3D01 (refactor) puede hacerse después porque no cambia nada visible.
+
+## TRASPASO
+_(Cada sesión que se detiene escribe aquí: tareas EN CURSO y su estado exacto, archivos a medias, comandos para probar, dudas abiertas.)_
