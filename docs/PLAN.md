@@ -951,8 +951,10 @@ CREATE TABLE agent_credentials (
   rotated_at  TEXT,
   revoked_at  TEXT
 );
-CREATE UNIQUE INDEX ux_agent_cred_active ON agent_credentials(agent_id, provider) WHERE revoked_at IS NULL;
+CREATE UNIQUE INDEX ux_agent_cred_label_active ON agent_credentials(agent_id, label) WHERE revoked_at IS NULL;
 ```
+
+**Decisión del CEO (2026-11-23):** un agente puede tener **VARIAS conexiones API activas**, también del mismo proveedor (p. ej. dos claves de Anthropic). Lo único que no se repite entre las activas de un agente es la **etiqueta**: el índice único es `(agent_id, label)` y no `(agent_id, provider)`. Una etiqueta repetida devuelve 409; al revocar una conexión su etiqueta queda libre.
 
 ### 16.3 Primer arranque: modo SETUP
 - Si la bóveda no tiene `db.url`, la API arranca en **modo SETUP**: solo responden `/api/health` y `/api/setup/*`, y todo lo demás devuelve 503 `SETUP_REQUIRED`.

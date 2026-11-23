@@ -283,6 +283,36 @@ class MemoryUpdate(StrictInput):
     ticket_id: Ref | None = None
 
 
+# ── Credenciales API de agentes (PLAN §16) ───────────────────────────────────────────────────
+CredentialProvider = Literal["anthropic", "openai", "google", "other"]
+SecretText = Annotated[str, Field(min_length=8, max_length=4096)]
+
+
+class AgentCredential(CamelModel):
+    """Metadatos de una conexión. La clave NUNCA sale de la API: solo `last4`."""
+
+    id: str
+    agent_id: str
+    provider: CredentialProvider
+    label: str
+    last4: str
+    key_version: int
+    created_by: str
+    created_at: str
+    rotated_at: str | None
+    revoked_at: str | None
+
+
+class CredentialCreate(StrictInput):
+    provider: CredentialProvider
+    label: Annotated[str, Field(min_length=1, max_length=80)]
+    secret: SecretText
+
+
+class CredentialRotate(StrictInput):
+    secret: SecretText
+
+
 # ── Mensajes (chat de mando) y resumen de estado ─────────────────────────────────────────────
 MessageScope = Literal["GLOBAL", "AGENT"]
 MessageKind = Literal["ORDER", "QUESTION", "NOTE", "STATUS", "REPLY"]
