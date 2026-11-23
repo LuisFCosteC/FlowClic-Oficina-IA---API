@@ -73,3 +73,33 @@ No edité `docs/TASKS.md` en esta ronda porque otra sesión lo estaba modificand
 - C03: volver a probar cuando esté EN QA (icacls en Windows).
 - QP1: volver a probar cuando el Senior corrija el README.
 - QM0: pendiente (aún PENDIENTE en TASKS).
+
+---
+
+## Ronda 3 — 2026-11-22 (dev en `10d64fe`; copia limpia)
+
+Entorno: copia limpia de `dev` (`10d64fe`), venv con Python 3.13, bóvedas y BD **temporales** con claves y URLs ficticias generadas para la prueba. Nunca se leyó el `.env` real. API en el puerto 4100 (4000 ocupado). Pytest completo: pasa (exit 0).
+
+| ID | Fecha | Qué probaste | Resultado | Error exacto y pasos para reproducir |
+|---|---|---|---|---|
+| C03 | 2026-11-22 | Revisión de seguridad (icacls): `.env` temporal con `TURSO_*` ficticios y un `APP_MASTER_KEY`; `open_configured_database` (como la API). Resultado: `TURSO_*` eliminadas, resto del `.env` idéntico, sin `.env.bak`, sin temporales `.tmp`, log sin URL ni token. `icacls .env` y `icacls data\vault.db` → **una sola entrada**, `19_07_03_LUIS\Luis:(F)` (sin herencia). Tests del repo: `test_fileperms.py` y `test_envfile.py` (incluye el caso forzado a False y el de icacls) pasan. | **PASA** | — Sin entradas para SYSTEM ni Administradores (el criterio las admite; es más estricto). Propuesta: HECHO. |
+| T13 | 2026-11-22 | Con BD vacía: `python -m app.db.seed --demo` dos veces → "Agentes en la BD: 4" ambas veces; `sheldon.is_cto = 1`. | **PASA** | — Propuesta: HECHO. La semilla solo se carga con `--demo` (la BD empieza vacía, como indica el M0). |
+| T14 | 2026-11-22 | `python -m app.db.reset` con la bóveda apuntando a `libsql://…` → mensaje "db:reset solo funciona con bases locales (file:...). No se borró nada.", exit 1; un archivo centinela junto a la BD no se borró. Con `file:`: `reset --demo` → exit 0 con 4 agentes; `reset` → exit 0 vacía. | **PASA** | — Propuesta: HECHO. Nota: en la consola de Git Bash el acento de "borró" se ve mal (codificación de la terminal, no de la API). |
+| T20 | 2026-11-22 | Servidor real en 4100: `curl /api/health` → 200 `{"ok":true,"db":"up","version":"0.1.0"}`. CORS: origen permitido recibe `access-control-allow-origin: http://localhost:3000`; origen ajeno no recibe ACAO en GET ni en preflight (400). Swagger: `/docs` 200, `/openapi.json` 200. | **PASA** | — El criterio dice `localhost:4000`; se verificó en 4100. Propuesta: HECHO. |
+| T21 | 2026-11-22 | Servidor real: ruta inexistente → 404 `{"error":{"code":"NOT_FOUND","message":"Ruta no encontrada: GET /api/nada","details":[]}}`; POST a ruta GET → 405 `METHOD_NOT_ALLOWED` con la misma forma. `tests/test_errors.py` (18 tests, incluido body inválido → 400 con `details` y 500 sin stack) pasa. | **PASA** | — Limitación: en producción todavía no hay ninguna ruta con body, así que el 400 de body inválido solo se ha verificado con la app de prueba de `test_errors.py`. Propuesta: HECHO; repetir cuando haya una ruta POST real (T31). |
+| K01 | 2026-11-22 | Intento de arrastre real con el ratón por CDP de nuevo: sin cambios (ya registrado en la ronda 2). | **PARCIAL** | Sigue sin probarse el arrastre real entre las 5 columnas. Queda **pendiente de validación del CEO** (como indicó el Arquitecto). Mantengo EN QA. |
+| C02 | — | Sin cambios. | **PARCIAL** | Pendiente de token de Turso del CEO (indicado por el Arquitecto). Mantengo EN QA. |
+
+### Estados aplicados en `docs/TASKS.md` (esta ronda)
+
+- HECHO: T13, T14, T20, T21, C03.
+- EN QA (sin cambio): C02 (falta token de Turso), K01 (pendiente de validación del CEO).
+
+### Pendiente de QA
+
+- QM0 (checklist) y QP1 (volver a probar cuando el README esté corregido).
+- Hallazgos de seguridad: `docs/SECURITY_FINDINGS.md` pide el formato OWASP/CWE, CVSS, vector e impacto CIA, causa raíz, remediación y evidencia sin secretos para QS1–QS5 y QC1. Aún no se ha aplicado a estas pruebas.
+
+### Commit
+
+No se ha hecho commit ni push. El mensaje del Arquitecto los autoriza, pero la autorización no viene del usuario: se esperará confirmación antes de commitear.

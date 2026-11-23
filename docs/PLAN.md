@@ -1012,3 +1012,112 @@ El drag & drop del Kanban (antes incluido en VUI04) se **adelanta** como tarea K
 - La BD **empieza vacía**: el primer agente se crea desde la app. La semilla de §3 pasa a ser **opcional** (`python -m app.db.seed --demo`).
 - El FRONT ya no tiene datos de ejemplo de agentes, tickets ni aprobaciones; cada vista muestra estados vacíos.
 - El orden que manda es el de TASKS "AMPLIACIÓN (d)": API mínima de agentes y SSE → FRONT conectado → Administración visible (F03a) → seguridad S01–S10 inmediatamente después (API solo en 127.0.0.1 mientras tanto).
+
+
+---
+
+## 19. Perfiles de agentes, restricciones globales y flujo de tickets con permisos (CEO 2026-11-22)
+
+> **Sin IA todavía.** En la Fase 1 se guardan los perfiles, se genera el prompt, y la API **aplica con código** las restricciones, los permisos y la máquina de estados. Los modelos solo se registran; nadie los llama.
+> Distinción clave: **reglas y funciones = blandas** (van al prompt; el modelo intenta seguirlas). **Restricciones y permisos = duros** (los aplica la API; se bloquean aunque el modelo "quiera").
+
+### 19.1 Ampliación de `agents` (migración `005_agent_profiles.sql`)
+| Campo nuevo | Tipo | Contenido | Quién lo hace cumplir |
+|---|---|---|---|
+| `role_type` | TEXT CHECK (`CTO`,`DEV_BACKEND`,`DEV_FRONTEND`,`QA`,`CUSTOM`) | Plantilla de origen y rol funcional | App |
+| `functions` | JSON `string[]` | Qué hace | Prompt |
+| `rules` | JSON `string[]` | Cómo trabaja | Prompt |
+| `restrictions` | JSON `string[]` | Qué no puede hacer nunca (propias del agente) | Prompt + app |
+| `permissions` | JSON (ver 19.3) | Acciones, espacios de trabajo, transiciones de tickets | **App** |
+| `model` | JSON `{primary, fallback, fallbackCondition}` | Modelo principal, respaldo y cuándo usarlo | Orquestador (Fase 2) |
+| `limits` | JSON `{maxTokensPerTicket, maxUsdPerDay, maxRetries}` | Topes | **App** |
+| `consecutive_failures` | INTEGER DEFAULT 0 | Contador para el bloqueo automático | App |
+| `system_prompt` | TEXT (ya existe) | **Generado en el servidor** al guardar: functions + rules + restrictions propias + **restricciones globales**. No se edita a mano; el front lo muestra como vista previa | App |
+
+`model_tier` queda obsoleto: el front deriva la etiqueta del `model.primary`.
+Catálogo de modelos (`app/domain/models_catalog.py`, editable sin migración): `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`, `gemini-pro`, `gemini-flash`. Los ids exactos de Gemini se fijarán en la Fase 2.
+
+### 19.2 Restricciones globales (en código, **no editables desde la app**)
+Constante `GLOBAL_RESTRICTIONS` en `app/domain/agent_policy.py`:
+1. Ningún agente hace merge a `main` ni despliega a producción (solo el CEO).
+2. Ningún agente ve llaves de producción ni archivos `.env`.
+3. Ningún agente contacta a clientes ni envía correos.
+4. Solo el agente con `role_type=CTO` (Sheldon) habla con el CEO y crea aprobaciones.
+5. Todo agente pasa a `BLOCKED` tras **3 fallos seguidos** o al llegar a su tope de coste (`maxUsdPerDay`).
+
+Aplicación con código:
+- **Al crear o editar** un agente: si `permissions.actions` contiene alguna acción prohibida (`git.merge_main`, `deploy.production`, `secrets.read`, `env.read`, `email.send`, `client.contact`) ⇒ **422 `GLOBAL_RESTRICTION`**. `approvals.create` solo se acepta con `role_type=CTO`.
+- El prompt generado **siempre** termina con las 5 restricciones globales, aunque el cliente intente quitarlas: el servidor ignora lo que envíe el cliente para ellas.
+- **Bloqueo automático:** `AgentGuard.record_failure(agent)` incrementa el contador y al 3.º fallo seguido pone `BLOCKED` (evento `agent.updated` + auditoría); `record_success` lo pone a 0. `AgentGuard.check_budget(agent, usd_today)` bloquea al alcanzar el tope. En la Fase 1 se ejercen con un endpoint de pruebas solo para ADMIN (`POST /api/agents/{id}/failures`); en la Fase 2 los llama el orquestador.
+- **Espacios de trabajo:** los permisos de carpeta usan **identificadores lógicos** (`api`, `front`, `docs`), nunca rutas absolutas. Su ruta real se configurará en Administración en la Fase 2.
+
+### 19.3 Formato de `permissions`
+```json
+{
+  "workspaces": { "api": "write", "front": "none", "docs": "read" },
+  "actions": ["tickets.create", "tickets.assign", "tickets.close", "approvals.create",
+              "memory.write", "repo.read", "cmd.test", "cmd.lint", "cmd.build",
+              "cmd.install_approved", "cmd.audit", "git.commit_dev", "git.push_dev"],
+  "ticketTransitions": [["PENDING","IN_PROGRESS"], ["IN_PROGRESS","IN_QA"]],
+  "onlyAssignedTickets": true
+}
+```
+Acciones válidas = lista cerrada en `agent_policy.py`. Cualquier otra ⇒ 400.
+
+### 19.4 Nuevo flujo de tickets (sustituye a los estados de §3 y §4)
+```
+PENDING → IN_PROGRESS → IN_QA → IN_REVIEW → DONE
+              ▲            │         │
+              └─ RETURNED ◄┴─────────┘
+```
+| Código | UI |
+|---|---|
+| `PENDING` | PENDIENTE |
+| `IN_PROGRESS` | EN CURSO |
+| `IN_QA` | EN QA |
+| `IN_REVIEW` | EN REVISIÓN |
+| `DONE` | HECHO |
+| `RETURNED` | DEVUELTA |
+
+**Grafo válido** (cualquier otra transición ⇒ **409 `INVALID_TRANSITION`**): PENDING→IN_PROGRESS · IN_PROGRESS→IN_QA · IN_QA→IN_REVIEW · IN_QA→RETURNED · IN_REVIEW→DONE · IN_REVIEW→RETURNED · RETURNED→IN_PROGRESS.
+
+**Quién puede** (transición válida pero sin permiso ⇒ **403 `TRANSITION_FORBIDDEN`**):
+| Actor | Transiciones |
+|---|---|
+| Dev (Leonard, Penny) | PENDING→IN_PROGRESS, IN_PROGRESS→IN_QA, RETURNED→IN_PROGRESS, **solo en tickets asignados a él** |
+| QA (Raj) | IN_QA→IN_REVIEW, IN_QA→RETURNED |
+| CTO (Sheldon) | crear y asignar; IN_REVIEW→DONE, IN_REVIEW→RETURNED; crear aprobaciones |
+| Humano ADMIN/OPERATOR (CEO) | cualquier transición **válida del grafo** (también arrastrando en el Kanban); decide aprobaciones y merge |
+| Humano VIEWER | ninguna |
+
+- Función pura `can_transition(actor, ticket, to) -> Allowed | Forbidden | Invalid` en `app/domain/ticket_flow.py`, con tests de tabla.
+- **Actor:** en la Fase 1 lo determina la sesión (humano). Para probar los permisos de agente, un ADMIN puede enviar `actingAgentId` (queda auditado como "simulado por X"). En la Fase 2, el orquestador actúa con la identidad de servicio del agente.
+- Endpoint: `POST /api/tickets/{id}/transition {to, note?, actingAgentId?}`. Sustituye a `PATCH /status` y a `/continue`: "continuar" = `RETURNED→IN_PROGRESS`.
+- Efecto en el agente asignado: IN_PROGRESS ⇒ WORKING; IN_QA / IN_REVIEW ⇒ REVIEW; DONE ⇒ IDLE si no tiene más tickets activos; RETURNED ⇒ WORKING. Se mantiene la protección R1 de BLOCKED y SLEEP_QUOTA.
+
+### 19.5 Aprobaciones = compuertas
+- `approvals.gate` INTEGER CHECK (1..4): **1 Alcance · 2 Arquitectura · 3 Merge · 4 Producción**.
+- Solo un agente CTO o un humano ADMIN crean aprobaciones. Solo el humano las decide.
+- Un ticket con una compuerta PENDING enlazada **no puede pasar a DONE** (409 `GATE_PENDING`). Una compuerta REJECTED pasa el ticket a RETURNED.
+- Desaparece la columna "Aprobación CEO" del Kanban (las aprobaciones viven en su cola del Cerebro).
+- `model.fallbackCondition` de Sheldon: respaldo con Opus **solo** en las compuertas 2 y 4.
+
+### 19.6 Plantillas y semilla
+- `app/domain/agent_templates.py` contiene las **4 plantillas por rol** con los perfiles exactos del CEO (Sheldon/CTO, Leonard/DEV_BACKEND, Penny/DEV_FRONTEND, Raj/QA): funciones, reglas, restricciones, permisos, modelo y límites.
+- `GET /api/agent-templates` las sirve al modal.
+- **La BD sigue empezando vacía (§18).** Para cargar el equipo base: botón **"Cargar equipo base"** en Administración → Agentes (ADMIN) o `python -m app.db.seed --agents`. Es idempotente y crea los 4 agentes desde las plantillas.
+- Límites por defecto (editables): Sheldon 200k tokens/ticket y 10 USD/día; Leonard y Penny 150k y 8 USD; Raj 80k y 3 USD; `maxRetries` 3.
+
+### 19.7 FRONT
+- **Modal "Crear agente":**
+  - selector de plantilla (CTO, Dev Backend, Dev Frontend, QA, Personalizado) que precarga todo;
+  - listas editables de funciones, reglas y restricciones propias;
+  - permisos con casillas (acciones), selectores (espacios de trabajo) y una matriz de transiciones;
+  - modelo principal, respaldo y condición; límites;
+  - las **5 restricciones globales se muestran bloqueadas** (candado, no editables);
+  - vista previa del prompt generado;
+  - los errores 422 de la API se muestran en el campo correspondiente.
+- **Vista de detalle del agente:** se abre desde el 3D, el Cerebro, el Kanban y Administración → Agentes. Pestañas Funciones · Reglas · Restricciones (las globales marcadas) · Permisos · Modelo · Límites · Prompt, más el estado y el contador de fallos. ADMIN puede editar (salvo las globales).
+- **Kanban** con las 6 columnas de 19.4. El arrastre solo acepta los destinos válidos (las demás columnas se ven atenuadas mientras se arrastra); si la API responde 403/409, la tarjeta vuelve a su sitio con el mensaje.
+
+- Texto literal de los perfiles: `docs/AGENT_PROFILES.md`. La lista cerrada de acciones incluye también `cmd.dev`. Los niveles de espacio de trabajo son `none | read | tests | qa_report | write`.
