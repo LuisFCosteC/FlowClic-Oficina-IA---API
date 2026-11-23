@@ -617,6 +617,18 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Probar: Ir a Administración → pestaña "Reglas"; añadir una regla obligatoria (MUST) y otra recomendada (SHOULD); cambiar el estado de activa/inactiva con el checkbox; cambiar el orden usando las flechas arriba/abajo y comprobar que persiste; editar una regla; eliminar una regla con el modal de confirmación; comprobar que abajo aparecen las 6 restricciones globales bloqueadas con candado.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 780ms). Commit `d594d97` en `dev` del FRONT.
 
+- **ADM06 (Dev Junior, 2026-11-23, EN QA)** — Configuración de Límites Operativos (A02/A04 en FRONT):
+  - Habilitada pestaña **"Límites"** (`limits`) en `AdminView.tsx` y creado componente `LimitsPanel.tsx`.
+  - Formulario consumiendo `GET/PUT /api/admin/settings/limits`:
+    - Máximo de agentes activos (1 a 100).
+    - Máximo de tickets activos por agente (1 a 100).
+    - Exigir aprobación para HECHO (`requireApprovalForDone`, checkbox).
+  - Texto informativo destacado: *"La API los aplica: si se superan, la acción se rechaza"*.
+  - Validación numérica y de rangos por campo.
+  - Sincronización en vivo mediante SSE (`settings.updated` con `key: "limits"`).
+  - Probar: Ir a Administración → pestaña "Límites"; ajustar máximo de agentes a 10 y tickets activos a 2; activar o desactivar exigencia de aprobación; pulsar "Guardar límites" y verificar mensaje de éxito; comprobar que al intentar superar los límites en la creación de agentes o transición de tickets la API rechaza la acción con error 409.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 427ms). Commit `b3bcdf6` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
