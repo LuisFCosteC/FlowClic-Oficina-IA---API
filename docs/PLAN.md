@@ -9,6 +9,118 @@
 > - Repos: `origin` en GitHub (`FlowClic-Oficina-IA---API` y `---FRONT`). Trabajo en `dev`; nada se mergea a `main` sin dictamen del Arquitecto.
 >
 > **Ampliación 2026-11-22 (CEO):** la **seguridad pasa a ser prioridad 1** (§12) y se añade el **panel de Administración** (§13). El orden de ejecución vigente es el de **§14**. Autenticación y usuarios dejan de estar fuera de alcance.
+>
+> **⚠ CAMBIO DE STACK 2026-11-22 (CEO): la API pasa a Python + FastAPI, con Swagger.** Manda la **§0**. Donde el resto del documento diga Node, Express, zod, `node:test`, `npm run …` o `node:crypto`, aplica la tabla de equivalencias de §0.4. El esquema SQL, los endpoints, el contrato JSON, el SSE, las reglas de negocio y la seguridad **no cambian**. La implementación en Node queda archivada en la rama `archive/node-express`.
+
+---
+
+## 0. Stack de la API: Python + FastAPI (vigente)
+
+### 0.1 Versiones y entorno
+- **Python 3.13** en un entorno virtual `.venv` dentro de la carpeta API (ignorado por git).
+  - Motivo: el SDK oficial de Turso para Python (`libsql` 0.1.11) solo trae binarios para Windows en **3.12 y 3.13**. Con la 3.14 que hay instalada no se puede instalar sin compilar Rust (verificado el 2026-11-22).
+  - En Windows se usa el lanzador `py` (`py -3.13`), no `python`, porque `python` apunta al acceso directo de la Microsoft Store.
+- Dependencias con versiones **exactas** en `requirements.txt` (ejecución) y `requirements-dev.txt` (desarrollo), gestionadas con `pip`. No se usan herramientas extra (uv/poetry).
+
+### 0.2 Dependencias (todas ligeras; requieren el OK del CEO)
+| Paquete | Para qué |
+|---|---|
+| `fastapi` | Framework. Genera **OpenAPI** y la documentación interactiva |
+| `uvicorn[standard]` | Servidor ASGI (con `--reload` en desarrollo) |
+| `pydantic-settings` | Leer y validar el `.env` (sustituye a zod/env.ts) |
+| `libsql` | Cliente oficial de libSQL/Turso (local `file:` y remoto `libsql://`) |
+| `cryptography` | AES-256-GCM para cifrar el secreto MFA (la biblioteca estándar de Python no trae AES) |
+| *dev:* `pytest`, `httpx` | Tests con `TestClient` de FastAPI |
+| *dev:* `pip-audit` | Auditar vulnerabilidades de dependencias (riesgo #9) |
+| *dev:* `ruff`, `mypy` | Lint y chequeo de tipos (sustituyen a `tsc --noEmit`) |
+
+Biblioteca estándar en lugar de paquetes: `hashlib.scrypt` (contraseñas), `hmac` + `base64` (TOTP), `secrets` (tokens), `sqlite3` (solo en el adaptador de respaldo, §0.3).
+
+### 0.3 Acceso a datos: adaptador propio
+`app/db/database.py` define una **interfaz `Database`**: `execute`, `fetch_all`, `fetch_one`, `transaction()` (context manager) y `close`. Implementaciones:
+1. **`LibsqlDatabase`** (por defecto): usa `libsql.connect(url, auth_token=...)`. Sirve para `file:` y para Turso.
+2. **`SqliteDatabase`** (respaldo, solo para URLs `file:`): biblioteca estándar `sqlite3`, para el caso de que `libsql` falle en algún equipo. Se activa con `DB_DRIVER=sqlite`.
+
+Reglas:
+- Ningún repositorio importa `libsql` directamente.
+- Todos obtienen la conexión con `get_db()`, que es una dependencia de FastAPI. Así es posible el cambio en caliente de §13.2 (`swap_db`).
+- Las rutas son `def` síncronas: FastAPI las ejecuta en un pool de hilos, porque `libsql` es síncrono.
+- **La primera tarea (P00) verifica esto en Windows** antes de construir nada encima.
+
+Las migraciones SQL (`migrations/NNN_*.sql`) **se conservan tal cual**: el SQL es el mismo.
+
+### 0.4 Equivalencias Node → Python (aplican a todas las tareas)
+| En el plan o en las tareas pone… | En Python significa… |
+|---|---|
+| Express, `app.ts`/`server.ts` | `app/main.py` con `create_app()` y `uvicorn` |
+| middleware de Express | middleware de Starlette y **dependencias** de FastAPI (`Depends`) |
+| zod `.strict()` | modelos **Pydantic v2** con `model_config = ConfigDict(extra='forbid')`, longitudes con `Field(max_length=…)` |
+| `requireAuth` / `requireRole(...)` / `requireRecentMfa` | dependencias `current_user`, `require_role(...)` y `require_recent_mfa` |
+| DTOs en camelCase | modelos con `alias_generator=to_camel` y `populate_by_name=True`; la API **responde en camelCase** (el contrato con el front no cambia) |
+| `node:test` + `fetch` | `pytest` + `fastapi.testclient.TestClient`, con BD temporal en `tmp_path` |
+| `node:crypto` scrypt / randomBytes / AES-GCM / HMAC | `hashlib.scrypt` / `secrets.token_bytes` / `cryptography` AESGCM / `hmac` |
+| EventEmitter (`events/bus.ts`) | `app/events/bus.py`: bus en memoria con suscriptores; el SSE usa una `asyncio.Queue` por cliente |
+| SSE en Express | `StreamingResponse(media_type='text/event-stream')` con heartbeat. Sin dependencia extra |
+| `npm run X` | comandos de §0.6 |
+| `tsc --noEmit` | `ruff check .` + `mypy app` |
+| `npm audit` | `pip-audit -r requirements.txt` |
+| `scripts/check-secrets.mjs` | `scripts/check_secrets.py` |
+| `src/...` | `app/...` |
+
+### 0.5 Estructura
+```
+FlowClic Oficina IA - API/
+├─ docs/                      PLAN.md · TASKS.md · QA_REPORT.md · SECURITY.md · DRP.md
+├─ migrations/                001_init.sql, 002_security.sql, 003_admin.sql (SQL sin cambios)
+├─ app/
+│   ├─ main.py                create_app(): middlewares, routers, OpenAPI, handlers de error
+│   ├─ config.py              Settings (pydantic-settings)
+│   ├─ db/database.py         interfaz Database + LibsqlDatabase + SqliteDatabase + get_db/swap_db
+│   ├─ db/migrate.py          runner (python -m app.db.migrate)
+│   ├─ db/seed.py · reset.py · backup.py · restore.py
+│   ├─ domain/                enums (StrEnum/Literal) y schemas Pydantic (entrada y salida)
+│   ├─ repositories/          SQL parametrizado, sin lógica
+│   ├─ services/              reglas (workflow), transacciones, emisión de eventos
+│   ├─ routers/               agents, tickets, approvals, memory, snapshot, events (SSE), auth, admin
+│   ├─ security/              password.py, sessions.py, totp.py, crypto.py, ratelimit.py, deps.py, audit.py
+│   ├─ events/bus.py
+│   ├─ orchestrator/          base.py (Protocol Orchestrator, FASE 2), noop.py
+│   └─ errors.py              AppError + formato único de error
+├─ scripts/                   setup_env.py, admin_create.py, check_secrets.py, install_hooks.py
+├─ tests/                     pytest
+├─ requirements.txt · requirements-dev.txt · pyproject.toml (config de ruff/mypy/pytest)
+├─ .env.example · .gitignore  (.venv/, .env, .env.bak, local.db*, backups/, __pycache__/, .pytest_cache/)
+```
+
+### 0.6 Comandos (PowerShell, desde la carpeta API)
+| Acción | Comando |
+|---|---|
+| Crear el entorno (una vez) | `py -3.13 -m venv .venv` |
+| Activarlo | `.\.venv\Scripts\Activate.ps1` |
+| Instalar | `pip install -r requirements.txt -r requirements-dev.txt` |
+| Crear el `.env` con claves aleatorias | `python scripts/setup_env.py` |
+| Migrar / sembrar / resetear | `python -m app.db.migrate` · `python -m app.db.seed` · `python -m app.db.reset` |
+| Crear tu usuario ADMIN | `python scripts/admin_create.py` |
+| Desarrollo | `uvicorn app.main:app --reload --host 127.0.0.1 --port 4000` |
+| Tests | `pytest` |
+| Lint y tipos | `ruff check .` · `mypy app` |
+| Auditoría de dependencias | `pip-audit -r requirements.txt` |
+| Backup / restaurar | `python -m app.db.backup` · `python -m app.db.restore <ruta>` |
+
+### 0.7 Documentación de la API (Swagger)
+- **Swagger UI:** `http://localhost:4000/docs` · **ReDoc:** `http://localhost:4000/redoc` · **Esquema:** `http://localhost:4000/openapi.json`.
+- Cada router lleva `tags` (Agentes, Tickets, Aprobaciones, Memoria, Tiempo real, Auth, Administración), `summary`, la descripción de errores posibles (`responses={401:…, 403:…, 409:…}`) y ejemplos en los modelos Pydantic.
+- La autenticación por cookie se declara como esquema de seguridad `APIKeyCookie(name='fc_session')`. Así se puede hacer login desde Swagger (`POST /api/auth/login`) y probar el resto de endpoints con esa sesión.
+- **Seguridad (riesgo #16):** la documentación se controla con `DOCS_ENABLED` (por defecto `true` en `development` y **`false` en `production`**). El esquema se puede ver sin sesión, pero **ningún endpoint funciona sin sesión**: ver la documentación no da acceso a nada.
+- La comprobación CSRF de `Origin` (§12.4) acepta `CORS_ORIGIN` **y** el propio origen de la API (`http://localhost:4000`) cuando `DOCS_ENABLED=true`. Si no, Swagger no podría hacer peticiones POST.
+
+### 0.8 Variables nuevas o cambiadas del `.env`
+```dotenv
+DB_DRIVER=libsql          # libsql | sqlite (respaldo, solo URLs file:)
+DOCS_ENABLED=true         # false en producción
+API_PUBLIC_ORIGIN=http://localhost:4000
+```
+(El resto de §9 y §12.5 se mantiene; `ORCHESTRATOR=noop` igual.)
 > Alcance: app local (API + FRONT conectado). **Sin agentes IA**: ninguna llamada a modelos, sin orquestador, sin automatización.
 
 ---
@@ -63,7 +175,7 @@
                     file:local.db (dev)  |  libsql://<db>.turso.io (nube)
 ```
 
-### Estructura de la API
+### Estructura de la API (⚠ OBSOLETA: Node. La vigente está en §0.5)
 ```
 FlowClic Oficina IA - API/
 ├─ docs/PLAN.md · TASKS.md · QA_REPORT.md
@@ -428,6 +540,7 @@ export interface Orchestrator {
 ---
 
 ## 8. Decisiones técnicas
+> ⚠ D1, D2, D3 y D11, y la lista de dependencias de esta sección, quedan **sustituidas por §0** (Python + FastAPI). El resto de decisiones sigue vigente.
 
 | # | Decisión | Motivo |
 |---|---|---|
@@ -453,6 +566,7 @@ export interface Orchestrator {
 ---
 
 ## 9. Puertos, variables y comandos
+> ⚠ Los scripts `npm` de la API quedan **sustituidos por §0.6**. Los puertos (API 4000, FRONT 3000), las variables y los comandos del FRONT siguen vigentes.
 
 ### Puertos
 | Servicio | Puerto |
@@ -524,7 +638,7 @@ Llamadas a modelos IA, orquestador real, automatizaciones/colas, roadmap/proyect
 ## 12. Seguridad (PRIORIDAD 1, añadida 2026-11-22 por el CEO)
 
 Principio: **ningún dato ni acción sin sesión válida y rol suficiente**, todo verificado en el servidor. El front solo oculta botones, nunca protege nada.
-**Sin dependencias nuevas:** todo se hace con `node:crypto` (scrypt, randomBytes, AES-256-GCM, HMAC para TOTP).
+**Implementación en Python (§0):** `hashlib.scrypt`, `secrets`, `hmac` (biblioteca estándar) y `cryptography` (AES-256-GCM).
 
 ### 12.1 Matriz de riesgos del CEO → medida → tarea
 | # | Riesgo | Medida en este proyecto | Tareas |
@@ -707,7 +821,8 @@ Eventos SSE nuevos: `settings.updated`, `rule.created/updated/deleted`, `system.
 
 ## 14. Orden de ejecución prioritario (CEO 2026-11-22)
 Objetivo **M1 = "probar en local con login y Administración"** lo antes posible, con la seguridad desde el primer endpoint:
-1. QA cierra lo que está EN QA (bloques 0–2).
+0. **(Cambio de stack)** P00 → P01. Después se reimplementan en Python T02, T10–T14, T20–T24 y T30, con los mismos criterios de aceptación (traducidos con §0.4). QA no prueba nada de la versión Node.
+1. QA verifica esas tareas reimplementadas cuando estén EN QA.
 2. **Seguridad base API:** S01 → S02 → S03 → S04 → S05 → S06 → S07 → S08 → S09 → S10.
 3. Agentes y tiempo real: T30 → T31 → T32 → T60 → T61.
 4. **Administración API:** A01 → A02 → A03 → A04 → A05 → A06 → A07.
