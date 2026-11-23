@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -52,7 +54,7 @@ def test_settings() -> Settings:
 
 
 @pytest.fixture
-def client(migrated_db: Database, test_settings: Settings) -> Iterator["TestClient"]:
+def client(migrated_db: Database, test_settings: Settings) -> Iterator[TestClient]:
     """Cliente HTTP contra la app, con una BD temporal migrada y VACÍA."""
     from fastapi.testclient import TestClient
 
@@ -61,3 +63,12 @@ def client(migrated_db: Database, test_settings: Settings) -> Iterator["TestClie
     app = create_app(test_settings, migrated_db)
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def seeded_client(client: TestClient, migrated_db: Database) -> TestClient:
+    """Como `client`, pero con los datos de DEMOSTRACIÓN (4 agentes, tickets...)."""
+    from app.db.seed import seed
+
+    seed(migrated_db)
+    return client
