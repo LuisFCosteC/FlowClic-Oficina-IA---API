@@ -87,17 +87,21 @@ def create_first_admin(db: Database, email: str, display_name: str, password: st
         password_hash = hash_password(password)
     except PasswordPolicyError as exc:
         raise validation_error(str(exc), [{"path": "password", "message": str(exc)}]) from None
-    if has_admin(db):
-        raise AppError("NOT_FOUND", "Ruta no encontrada")
     user_id = new_id()
     now = now_iso()
     try:
-        db.execute(
-            "INSERT INTO users (id, email, display_name, password_hash, role, mfa_enabled,"
-            " password_changed_at, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, 'ADMIN', 0, ?, ?, ?)",
-            (user_id, email, display_name.strip(), password_hash, now, now, now),
-        )
+        with db.transaction() as tx:
+            # Inserción atómica: solo si todavía no existe ningún ADMIN (no hay carrera posible).
+            tx.execute(
+                "INSERT INTO users (id, email, display_name, password_hash, role, mfa_enabled,"
+                " password_changed_at, created_at, updated_at)"
+                " SELECT ?, ?, ?, ?, 'ADMIN', 0, ?, ?, ?"
+                " WHERE NOT EXISTS (SELECT 1 FROM users WHERE role = 'ADMIN')",
+                (user_id, email, display_name.strip(), password_hash, now, now, now),
+            )
+            changed = tx.fetch_one("SELECT changes() AS n")
+            if not changed or int(changed["n"]) == 0:
+                raise AppError("NOT_FOUND", "Ruta no encontrada")
     except IntegrityError:
         raise conflict("Ya existe un usuario con ese email") from None
     return user_id

@@ -17,7 +17,7 @@ py -3.13 -m venv .venv                                   # una vez
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt -r requirements-dev.txt
 python scripts/setup_env.py                              # crea .env con APP_MASTER_KEY y SESSION_SECRET aleatorios
-uvicorn app.main:app --reload --host 127.0.0.1 --port 4000
+uvicorn app.main:app --reload --host 127.0.0.1 --port 4000 --no-proxy-headers --no-server-header
 ```
 Swagger: <http://localhost:4000/docs> · ReDoc: <http://localhost:4000/redoc> · Esquema: <http://localhost:4000/openapi.json>
 
@@ -38,7 +38,7 @@ python -m app.db.reset              # solo bases file: — borra y recrea la BD 
 ## Comandos disponibles
 | Acción | Comando |
 |---|---|
-| Servidor (solo Swagger por ahora) | `uvicorn app.main:app --reload --host 127.0.0.1 --port 4000` |
+| Servidor (solo Swagger por ahora) | `uvicorn app.main:app --reload --host 127.0.0.1 --port 4000 --no-proxy-headers --no-server-header` |
 | Crear `.env` con claves aleatorias | `python scripts/setup_env.py` |
 | Migrar | `python -m app.db.migrate` |
 | Datos de ejemplo (opcional) | `python -m app.db.seed --demo` |

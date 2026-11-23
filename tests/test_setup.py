@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -7,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
-from app.db.database import connect_database, try_get_db
+from app.db.database import Database, connect_database, try_get_db
 from app.main import create_app
 from app.security.crypto import SecretBox, generate_master_key
 from app.security.setup_gate import SetupGate
@@ -24,8 +25,8 @@ class Env:
         self.vault = Vault(tmp_path / "data" / "vault.db", SecretBox.from_base64(key))
         self.app = create_app(self.settings, None, self.vault)
         self.db_url = "file:" + (tmp_path / "main.db").as_posix()
-        self.local = TestClient(self.app, client=("127.0.0.1", 50000))
-        self.remote = TestClient(self.app, client=("10.0.0.5", 50000))
+        self.local = TestClient(self.app, base_url="http://localhost", client=("127.0.0.1", 50000))
+        self.remote = TestClient(self.app, base_url="http://localhost", client=("10.0.0.5", 50000))
 
     @property
     def code(self) -> str:
@@ -241,7 +242,7 @@ def test_arrancar_con_bd_en_la_boveda_no_entra_en_modo_setup(tmp_path: Path) -> 
     migrate(db)
     db.close()
     app = create_app(settings, None, vault)
-    with TestClient(app, client=("127.0.0.1", 1)) as c:
+    with TestClient(app, base_url="http://localhost", client=("127.0.0.1", 1)) as c:
         assert c.get("/api/health").json()["db"] == "up"
         assert c.get("/api/setup/status").json() == {
             "setupRequired": True,
@@ -249,3 +250,118 @@ def test_arrancar_con_bd_en_la_boveda_no_entra_en_modo_setup(tmp_path: Path) -> 
             "hasAdmin": False,
         }
     vault.close()
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        {"X-Forwarded-For": "203.0.113.9"},
+        {"Forwarded": "for=203.0.113.9"},
+        {"X-Real-IP": "203.0.113.9"},
+        {"X-Forwarded-Host": "api.ejemplo.com"},
+        {"X-Forwarded-Proto": "https"},
+    ],
+)
+def test_cabeceras_de_proxy_dan_403_aunque_el_cliente_parezca_local(
+    env: Env, header: dict[str, str]
+) -> None:
+    assert env.local.get("/api/setup/status", headers=header).status_code == 403
+    r = env.local.post("/api/setup/database", json=env.database(), headers=header)
+    assert r.status_code == 403
+    assert not env.vault.has("db.url")
+
+
+@pytest.mark.parametrize("host", ["evil.example.com", "api.ejemplo.com:4000", "10.0.0.5"])
+def test_host_distinto_de_localhost_da_403(env: Env, host: str) -> None:
+    assert env.local.get("/api/setup/status", headers={"Host": host}).status_code == 403
+    r = env.local.post("/api/setup/database", json=env.database(), headers={"Host": host})
+    assert r.status_code == 403
+
+
+@pytest.mark.parametrize("host", ["localhost", "localhost:4000", "127.0.0.1:4000", "[::1]:4000"])
+def test_hosts_locales_validos(env: Env, host: str) -> None:
+    assert env.local.get("/api/setup/status", headers={"Host": host}).status_code == 200
+
+
+def test_el_codigo_se_consume_tras_cada_paso_correcto(env: Env) -> None:
+    first = env.code
+    assert env.local.post("/api/setup/database", json=env.database()).status_code == 200
+    assert env.code != first  # se emitió un código nuevo (solo en la consola)
+    reuse = env.local.post("/api/setup/admin", json=env.admin(setupCode=first))
+    assert reuse.status_code == 403
+    assert env.local.post("/api/setup/admin", json=env.admin()).status_code == 201
+    assert env.app.state.setup_gate.code is None
+
+
+def _two_clients(env: Env) -> tuple[TestClient, TestClient]:
+    def make() -> TestClient:
+        return TestClient(env.app, base_url="http://localhost", client=("127.0.0.1", 50000))
+
+    return make(), make()
+
+
+def test_dos_peticiones_simultaneas_de_database_solo_una_tiene_exito(
+    env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.services import setup_service
+
+    real = setup_service.connect_and_migrate
+
+    def slow(*a: object, **k: object):  # type: ignore[no-untyped-def]
+        time.sleep(0.4)  # fuerza el solape entre las dos peticiones
+        return real(*a, **k)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(setup_service, "connect_and_migrate", slow)
+    c1, c2 = _two_clients(env)
+    body = env.database()
+    with ThreadPoolExecutor(2) as pool:
+        futures = [pool.submit(c.post, "/api/setup/database", json=body) for c in (c1, c2)]
+        codes = sorted(f.result().status_code for f in futures)
+    assert codes[0] == 200
+    assert codes[1] in (403, 409)
+    assert env.vault.get_secret("db.url") == env.db_url
+
+
+def test_dos_peticiones_simultaneas_de_admin_solo_una_crea_el_admin(env: Env) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    assert env.local.post("/api/setup/database", json=env.database()).status_code == 200
+    c1, c2 = _two_clients(env)
+    code = env.code
+    with ThreadPoolExecutor(2) as pool:
+        futures = [
+            pool.submit(
+                c.post,
+                "/api/setup/admin",
+                json=env.admin(setupCode=code, email=f"admin{i}@example.com"),
+            )
+            for i, c in enumerate((c1, c2))
+        ]
+        codes = sorted(f.result().status_code for f in futures)
+    assert codes[0] == 201
+    assert codes[1] in (403, 404, 409)
+    db = try_get_db()
+    assert db is not None
+    assert db.fetch_one("SELECT COUNT(*) AS n FROM users WHERE role = 'ADMIN'") == {"n": 1}
+
+
+def test_insercion_atomica_del_admin_sin_pasar_por_el_lock(migrated_db: Database) -> None:
+    """Aunque dos llamadas lleguen a la vez al servicio, la inserción garantiza un solo ADMIN."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.errors import AppError
+    from app.services.setup_service import create_first_admin
+
+    def attempt(i: int) -> str:
+        try:
+            create_first_admin(migrated_db, f"a{i}@example.com", "A", PASSWORD)
+            return "ok"
+        except AppError as exc:
+            return exc.code
+
+    with ThreadPoolExecutor(2) as pool:
+        results = sorted(pool.map(attempt, range(2)))
+    assert results == ["NOT_FOUND", "ok"]
+    assert migrated_db.fetch_one("SELECT COUNT(*) AS n FROM users") == {"n": 1}

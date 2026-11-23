@@ -42,6 +42,8 @@ class SetupGate:
         self._clock = clock
         self._announce = announce
         self._lock = threading.Lock()
+        # Serializa toda la secuencia comprobación + escritura de un paso del asistente.
+        self.operation = threading.Lock()
         self._code: str | None = None
         self._expires = 0.0
         self._attempts = 0

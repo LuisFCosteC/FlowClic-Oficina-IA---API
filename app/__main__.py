@@ -7,7 +7,15 @@ from app.config import get_settings
 
 def main() -> None:
     settings = get_settings()
-    uvicorn.run("app.main:app", host=settings.host, port=settings.port)
+    # Sin cabeceras de proxy (el asistente de setup no puede fiarse de X-Forwarded-For) ni
+    # cabecera `server:` (S01 #10).
+    uvicorn.run(
+        "app.main:app",
+        host=settings.host,
+        port=settings.port,
+        proxy_headers=False,
+        server_header=False,
+    )
 
 
 if __name__ == "__main__":

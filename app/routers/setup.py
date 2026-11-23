@@ -63,16 +63,40 @@ def _status() -> SetupStatus:
     )
 
 
+LOCAL_HOST_HEADERS = {"localhost", "127.0.0.1", "[::1]", "::1"}
+PROXY_HEADERS = ("forwarded", "x-real-ip")
+
+
+def _require_local(request: Request) -> None:
+    """Solo accesos directos desde esta máquina (PLAN §16.3).
+
+    No basta con `request.client.host`: detrás de un proxy inverso todas las peticiones parecen
+    locales. Por eso se rechaza (403) cualquier petición con cabeceras de proxy o con un `Host`
+    que no sea localhost/127.0.0.1. Además, uvicorn se arranca con `--no-proxy-headers`.
+    """
+    denied = AppError(
+        "FORBIDDEN", "El asistente de configuración solo está disponible en localhost"
+    )
+    host = request.client.host if request.client else None
+    if host not in LOCAL_HOSTS:
+        raise denied
+    headers = request.headers
+    if any(h in headers for h in PROXY_HEADERS) or any(
+        k.startswith("x-forwarded-") for k in headers
+    ):
+        raise denied
+    authority = headers.get("host", "")
+    hostname = authority.rsplit(":", 1)[0] if not authority.endswith("]") else authority
+    if hostname.lower() not in LOCAL_HOST_HEADERS:
+        raise denied
+
+
 def _ensure_open(request: Request) -> SetupStatus:
     """404 si el asistente está cerrado (o no hay bóveda); 403 si la petición no es local."""
     status = _status()
     if _vault(request) is None or not status.setup_required:
         raise not_found("Ruta no encontrada")
-    host = request.client.host if request.client else None
-    if host not in LOCAL_HOSTS:
-        raise AppError(
-            "FORBIDDEN", "El asistente de configuración solo está disponible en localhost"
-        )
+    _require_local(request)
     return status
 
 
@@ -80,9 +104,7 @@ def _ensure_open(request: Request) -> SetupStatus:
 def setup_status(request: Request) -> SetupStatus:
     status = _status()
     if status.setup_required:  # abierto: solo desde localhost
-        host = request.client.host if request.client else None
-        if host not in LOCAL_HOSTS:
-            raise AppError("FORBIDDEN", "El asistente solo está disponible en localhost")
+        _require_local(request)
     return status
 
 
@@ -92,26 +114,30 @@ def setup_database(
     request: Request,
     gate: Annotated[SetupGate, Depends(_gate)],
 ) -> SetupStatus:
-    status = _ensure_open(request)
-    gate.verify(body.setup_code)
-    if status.has_database:
-        raise conflict("Ya hay una conexión de base de datos configurada")
-    vault = _vault(request)
-    assert vault is not None  # noqa: S101  (garantizado por _ensure_open)
-    db = setup_service.connect_and_migrate(
-        body.url, body.auth_token or None, request.app.state.settings.db_driver
-    )
-    try:
-        vault.set_secret("db.url", body.url, updated_by="setup")
-        if body.auth_token:
-            vault.set_secret("db.auth_token", body.auth_token, updated_by="setup")
-        else:
-            vault.delete_secret("db.auth_token")
-    except Exception:
-        db.close()
-        raise
-    swap_db(db)
-    return _status()
+    # Un único lock para toda la secuencia comprobación + escritura: dos peticiones simultáneas
+    # no pueden crear dos conexiones (TOCTOU). El código se consume tras el paso correcto.
+    with gate.operation:
+        status = _ensure_open(request)
+        gate.verify(body.setup_code)
+        if status.has_database:
+            raise conflict("Ya hay una conexión de base de datos configurada")
+        vault = _vault(request)
+        assert vault is not None  # noqa: S101  (garantizado por _ensure_open)
+        db = setup_service.connect_and_migrate(
+            body.url, body.auth_token or None, request.app.state.settings.db_driver
+        )
+        try:
+            vault.set_secret("db.url", body.url, updated_by="setup")
+            if body.auth_token:
+                vault.set_secret("db.auth_token", body.auth_token, updated_by="setup")
+            else:
+                vault.delete_secret("db.auth_token")
+        except Exception:
+            db.close()
+            raise
+        swap_db(db)
+        gate.issue()  # código consumido: el paso del ADMIN exige uno nuevo (solo en la consola)
+        return _status()
 
 
 @router.post("/admin", summary="Crear el primer usuario ADMIN", status_code=201)
@@ -120,11 +146,12 @@ def setup_admin(
     request: Request,
     gate: Annotated[SetupGate, Depends(_gate)],
 ) -> SetupStatus:
-    status = _ensure_open(request)
-    gate.verify(body.setup_code)
-    db = try_get_db()
-    if not status.has_database or db is None:
-        raise conflict("Configura primero la base de datos")
-    setup_service.create_first_admin(db, body.email, body.display_name, body.password)
-    gate.close()  # BD + ADMIN: el asistente se cierra
-    return _status()
+    with gate.operation:
+        status = _ensure_open(request)
+        gate.verify(body.setup_code)
+        db = try_get_db()
+        if not status.has_database or db is None:
+            raise conflict("Configura primero la base de datos")
+        setup_service.create_first_admin(db, body.email, body.display_name, body.password)
+        gate.close()  # BD + ADMIN: el asistente se cierra
+        return _status()
