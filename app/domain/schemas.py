@@ -11,7 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 AgentStatus = Literal["IDLE", "WORKING", "REVIEW", "BLOCKED", "SLEEP_QUOTA"]
-TicketStatus = Literal["BACKLOG", "IN_PROGRESS", "REVIEW", "AWAITING_APPROVAL", "DONE"]
+TicketStatus = Literal["PENDING", "IN_PROGRESS", "IN_QA", "IN_REVIEW", "DONE", "RETURNED"]
+Gate = Literal[1, 2, 3, 4]  # 1 Alcance · 2 Arquitectura · 3 Merge · 4 Producción
 Priority = Literal["HIGH", "MEDIUM", "LOW"]
 ModelTier = Literal["opus_pro", "sonnet_pro", "haiku_flash"]
 ApprovalStatus = Literal["PENDING", "APPROVED", "REJECTED", "CANCELLED"]
@@ -170,6 +171,7 @@ class Approval(CamelModel):
     id: str
     ticket_id: str | None
     agent_id: str | None
+    gate: Gate
     title: str
     category: ApprovalCategory
     summary: str
@@ -183,6 +185,7 @@ class Approval(CamelModel):
 
 
 class ApprovalCreate(StrictInput):
+    gate: Gate
     title: Title
     ticket_id: Ref | None = None
     agent_id: Ref | None = None

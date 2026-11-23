@@ -22,8 +22,8 @@ CREATE TABLE tickets (
   id                 TEXT PRIMARY KEY,
   title              TEXT NOT NULL,
   description        TEXT NOT NULL DEFAULT '',
-  status             TEXT NOT NULL DEFAULT 'BACKLOG'
-                     CHECK (status IN ('BACKLOG','IN_PROGRESS','REVIEW','AWAITING_APPROVAL','DONE')),
+  status             TEXT NOT NULL DEFAULT 'PENDING'
+                     CHECK (status IN ('PENDING','IN_PROGRESS','IN_QA','IN_REVIEW','DONE','RETURNED')),
   priority           TEXT NOT NULL DEFAULT 'MEDIUM'
                      CHECK (priority IN ('HIGH','MEDIUM','LOW')),
   assigned_agent_id  TEXT REFERENCES agents(id),
@@ -57,6 +57,7 @@ CREATE TABLE approvals (
   ticket_id        TEXT REFERENCES tickets(id),
   agent_id         TEXT REFERENCES agents(id),
   title            TEXT NOT NULL,
+  gate             INTEGER NOT NULL CHECK (gate BETWEEN 1 AND 4),  -- 1 Alcance, 2 Arquitectura, 3 Merge, 4 Producción
   category         TEXT NOT NULL DEFAULT 'Arquitectura'
                    CHECK (category IN ('Arquitectura','Despliegue','Seguridad','Datos')),
   summary          TEXT NOT NULL DEFAULT '',
@@ -70,7 +71,8 @@ CREATE TABLE approvals (
   decided_at       TEXT
 );
 CREATE INDEX ix_approvals_status ON approvals(status);
-CREATE UNIQUE INDEX ux_approvals_pending_ticket ON approvals(ticket_id) WHERE status = 'PENDING' AND ticket_id IS NOT NULL;
+-- Una sola compuerta PENDING por ticket y número de compuerta:
+CREATE UNIQUE INDEX ux_approvals_pending_ticket_gate ON approvals(ticket_id, gate) WHERE status = 'PENDING' AND ticket_id IS NOT NULL;
 
 CREATE TABLE project_memory (
   id         TEXT PRIMARY KEY,

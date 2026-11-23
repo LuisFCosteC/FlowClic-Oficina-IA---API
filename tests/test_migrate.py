@@ -35,7 +35,8 @@ def test_primera_ejecucion_aplica_todo_y_la_segunda_nada(raw_db: Database) -> No
     assert second.applied == []
     assert second.skipped == n_files
     assert {"agents", "tickets", "approvals", "schema_migrations"} <= tables(raw_db)
-    assert schema_version(raw_db) == n_files
+    last = max(int(p.name.split("_")[0]) for p in MIGRATIONS_DIR.glob("*.sql"))
+    assert schema_version(raw_db) == last
 
 
 def test_migracion_rota_no_se_registra_ni_deja_tablas_parciales(

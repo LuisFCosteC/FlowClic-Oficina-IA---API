@@ -44,7 +44,7 @@ def test_tickets_aprobacion_y_memoria_de_ejemplo(migrated_db: Database) -> None:
     seed(migrated_db)
     seed(migrated_db)
     statuses = [r["status"] for r in migrated_db.fetch_all("SELECT status FROM tickets")]
-    assert sorted(statuses) == ["AWAITING_APPROVAL", "BACKLOG", "IN_PROGRESS", "REVIEW"]
+    assert sorted(statuses) == ["IN_PROGRESS", "IN_QA", "IN_REVIEW", "PENDING"]
     assert count(migrated_db, "ticket_events") == 4
     pending = migrated_db.fetch_all("SELECT ticket_id FROM approvals WHERE status = 'PENDING'")
     assert pending == [{"ticket_id": "seed-ticket-4"}]
