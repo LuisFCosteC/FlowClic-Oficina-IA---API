@@ -7,6 +7,8 @@
 > - Añadidos mínimos al FRONT de D6/T76/T77 aprobados (mismos estilos existentes).
 > - FRONT usa npm; `bun.lock` se **conserva** hasta que el CEO confirme borrarlo.
 > - Repos: `origin` en GitHub (`FlowClic-Oficina-IA---API` y `---FRONT`). Trabajo en `dev`; nada se mergea a `main` sin dictamen del Arquitecto.
+>
+> **Ampliación 2026-11-22 (CEO):** la **seguridad pasa a ser prioridad 1** (§12) y se añade el **panel de Administración** (§13). El orden de ejecución vigente es el de **§14**. Autenticación y usuarios dejan de estar fuera de alcance.
 > Alcance: app local (API + FRONT conectado). **Sin agentes IA**: ninguna llamada a modelos, sin orquestador, sin automatización.
 
 ---
@@ -514,4 +516,203 @@ Pasar a Turso nube: cambiar `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN` en `.env`,
 - Merge `dev` → `main` solo con revisión del Arquitecto.
 
 ## 11. Fuera de alcance (Fase 1)
-Llamadas a modelos IA, orquestador real, automatizaciones/colas, autenticación/usuarios, roadmap/proyectos en BD, router de modelos real, UI de memoria del proyecto, UI de historial de ticket (el endpoint existe), despliegue.
+Llamadas a modelos IA, orquestador real, automatizaciones/colas, roadmap/proyectos en BD, router de modelos real, UI de memoria del proyecto, UI de historial de ticket (el endpoint existe), despliegue, pagos.
+> **Cambio 2026-11-22:** autenticación y usuarios **entran** en la Fase 1 (ver §12).
+
+---
+
+## 12. Seguridad (PRIORIDAD 1, añadida 2026-11-22 por el CEO)
+
+Principio: **ningún dato ni acción sin sesión válida y rol suficiente**, todo verificado en el servidor. El front solo oculta botones, nunca protege nada.
+**Sin dependencias nuevas:** todo se hace con `node:crypto` (scrypt, randomBytes, AES-256-GCM, HMAC para TOTP).
+
+### 12.1 Matriz de riesgos del CEO → medida → tarea
+| # | Riesgo | Medida en este proyecto | Tareas |
+|---|---|---|---|
+| 1 | Secretos en GitHub | `.env`, `local.db*`, `backups/` en `.gitignore`; hook `pre-commit` (script propio, sin deps) que bloquea patrones de secretos; GitHub *secret scanning + push protection* activado; repos **privados**. Historial auditado el 2026-11-22: limpio. | S11 |
+| 2 | Secretos en el front | El front **no tiene secretos**: solo `VITE_API_URL` (todo `VITE_*` es público por diseño). Se elimina `GEMINI_API_KEY` del `.env.example` del front y la dependencia `@google/genai` (no se usa en `src/`). El token de BD nunca sale de la API (ni en el panel: campo solo escritura). | F05, A05 |
+| 3 | BD expuesta / sin reglas | El navegador **nunca** habla con la BD. Archivo local no servido por HTTP. Turso solo con token (preferible token con alcance a esa BD y rotación). libSQL no tiene RLS ⇒ **las reglas de acceso viven en la API** (middleware de rol por ruta, §12.3). API escucha en `HOST=127.0.0.1` por defecto. | S01, S09 |
+| 4 | IDOR / BOLA | Modelo de un solo inquilino: todos los usuarios ven la misma oficina, pero **cada ruta exige un rol** (§12.3). Recursos "propios" (sesiones, perfil, MFA) siempre se resuelven desde la sesión (`/api/auth/me/...`), **nunca** con un id de usuario en la URL. Ids UUID. Tests de acceso cruzado obligatorios. | S09, QS3 |
+| 5 | Endpoints sin auth | `requireAuth` global; lista blanca explícita de rutas públicas: `POST /api/auth/login`, `POST /api/auth/mfa/verify` (con token de login a medio camino) y `GET /api/health` (que solo responde `{ok}`). SSE también exige sesión. | S09 |
+| 6 | Pagos sin validar | **No aplica**: no hay pagos. Regla para el futuro: montos solo calculados en el servidor y webhooks con firma verificada. | — |
+| 7 | Login sin rate limit | Limitador en memoria por IP (10 intentos / 15 min) **y** bloqueo por cuenta (5 fallos ⇒ 15 min, progresivo); mismo mensaje genérico para usuario inexistente o clave errónea; comparación en tiempo constante y hash ficticio para usuarios inexistentes (evita enumerar usuarios por tiempo de respuesta). También en verificación MFA. | S07 |
+| 8 | Inputs sin validar (SQLi/XSS) | zod `.strict()` en **todo** body/query/param con longitudes máximas; SQL **solo parametrizado** (prohibido interpolar en `execute`); límite de body 100 kB; React escapa por defecto y queda **prohibido** `dangerouslySetInnerHTML`; cabeceras de seguridad (CSP `default-src 'none'` en la API, `nosniff`, `frame-ancestors 'none'`, `Referrer-Policy`). | S01, S09, QS3 |
+| 9 | Dependencias vulnerables | `npm audit --audit-level=high` en ambos repos como paso de QA y antes de cada merge; `.github/dependabot.yml`; lockfiles versionados; se quitan dependencias sin uso del front (`@google/genai`, `express`, `dotenv`). | S11, F05 |
+| 10 | Stack traces en errores | Middleware de errores ya definido (500 sin stack, sin rutas); `x-powered-by` desactivado; logs internos con `requestId`, sin secretos ni contraseñas. | S01 |
+| 11 | Contraseñas en texto plano | `scrypt` (N=2^17, r=8, p=1, sal aleatoria de 16 B por usuario), formato `scrypt$N$r$p$salt$hash` para poder subir parámetros después. Política: mínimo 12 caracteres. | S04 |
+| 12 | Sin backups / DRP | `npm run db:backup` (local: `VACUUM INTO backups/…`; remoto: exportación JSON de todas las tablas); backup automático programado por la API (`BACKUP_INTERVAL_HOURS`, retención `BACKUP_KEEP`); `npm run db:restore <archivo>`; `docs/DRP.md` con RPO 24 h / RTO 1 h y prueba de restauración como tarea de QA. Turso añade su recuperación a un punto en el tiempo. | S12, QS4 |
+| 13 | Cuenta admin genérica | **No existe usuario por defecto ni clave en la semilla.** Cada persona tiene su usuario. El primer ADMIN se crea con `npm run admin:create` (pide email y contraseña por consola). Los demás se crean desde Administración → Usuarios. Auditoría de acciones por usuario. | S05, S10, A07 |
+| 14 | Sin MFA | TOTP (RFC 6238, apps tipo Google Authenticator) **obligatorio para ADMIN** y opcional para el resto. Secreto cifrado en BD con AES-256-GCM (`APP_ENCRYPTION_KEY`). Las acciones críticas (cambiar URL de BD, usuarios y roles) exigen **reautenticación reciente** (MFA en los últimos 10 min). | S08 |
+| 15 | Credenciales hardcodeadas | Todo secreto viene del `.env`; `npm run setup` genera `.env` a partir de `.env.example` con claves aleatorias (`APP_ENCRYPTION_KEY`, `SESSION_SECRET`). El hook S11 y QA buscan cadenas sospechosas. | S02, S11 |
+| 16 | Panel admin público | `/api/admin/*` exige rol ADMIN, MFA activo y reautenticación reciente para lo crítico. La vista "Administración" del front solo se muestra a ADMIN, pero la protección real está en la API. | S09, A01–A07 |
+| 17 | Sesiones eternas | Token opaco de 32 B aleatorios en cookie `HttpOnly; SameSite=Strict; Path=/api` (y `Secure` fuera de localhost). En BD solo se guarda su **SHA-256**. Expira tras **30 min de inactividad** y como máximo a las **8 h**. Logout, "cerrar todas mis sesiones", y revocación automática al cambiar contraseña, rol o desactivar el usuario. | S06 |
+| 18 | IA con acceso total a la BD | Diseño para la Fase 2 (§7): el orquestador **no recibe cliente de BD**, solo llama a services con una identidad de servicio de rol `AGENT` (mínimo privilegio: tickets, eventos y memoria; nunca usuarios, ajustes, conexión de BD ni aprobaciones). Las salidas de un modelo son entrada no confiable (validación zod igual que HTTP). Las acciones destructivas pasan por la compuerta de aprobación humana. Nunca se apunta a una BD de producción durante las pruebas con IA. | Documentado; S13 |
+| 19 | Sin evaluación periódica | `docs/SECURITY.md` con modelo de amenazas (STRIDE resumido) y checklist; al cerrar cada fase, QA ejecuta: `npm audit`, búsqueda de secretos, pruebas de IDOR/autenticación/rate limit/cabeceras (QS1–QS5). | S13, QS5 |
+
+### 12.2 Esquema (`migrations/002_security.sql`)
+```sql
+CREATE TABLE users (
+  id               TEXT PRIMARY KEY,
+  email            TEXT NOT NULL,              -- guardado en minúsculas
+  display_name     TEXT NOT NULL,
+  password_hash    TEXT NOT NULL,              -- scrypt$N$r$p$salt$hash
+  role             TEXT NOT NULL CHECK (role IN ('ADMIN','OPERATOR','VIEWER')),
+  mfa_secret_enc   TEXT,                       -- AES-256-GCM (iv:tag:ciphertext, base64)
+  mfa_enabled      INTEGER NOT NULL DEFAULT 0,
+  failed_attempts  INTEGER NOT NULL DEFAULT 0,
+  locked_until     TEXT,
+  last_login_at    TEXT,
+  password_changed_at TEXT NOT NULL,
+  disabled_at      TEXT,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL
+);
+CREATE UNIQUE INDEX ux_users_email ON users(email);
+
+CREATE TABLE sessions (
+  id              TEXT PRIMARY KEY,
+  user_id         TEXT NOT NULL REFERENCES users(id),
+  token_hash      TEXT NOT NULL,               -- SHA-256 del token; el token nunca se guarda
+  mfa_verified_at TEXT,                        -- base de la reautenticación reciente
+  ip              TEXT,
+  user_agent      TEXT,
+  created_at      TEXT NOT NULL,
+  last_seen_at    TEXT NOT NULL,
+  expires_at      TEXT NOT NULL,               -- límite absoluto (8 h)
+  revoked_at      TEXT
+);
+CREATE UNIQUE INDEX ux_sessions_token ON sessions(token_hash);
+CREATE INDEX ix_sessions_user ON sessions(user_id);
+
+CREATE TABLE audit_log (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT,                            -- NULL = anónimo (p. ej. login fallido)
+  action      TEXT NOT NULL,                   -- 'auth.login_ok','auth.login_fail','admin.db_changed','user.role_changed',...
+  target_type TEXT,
+  target_id   TEXT,
+  ip          TEXT,
+  meta        TEXT NOT NULL DEFAULT '{}',      -- JSON SIN secretos
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX ix_audit_created ON audit_log(created_at);
+```
+
+### 12.3 Roles y permisos (aplicados por `requireRole` en cada ruta)
+| Recurso / acción | VIEWER | OPERATOR | ADMIN |
+|---|---|---|---|
+| Leer agentes, tickets, aprobaciones, historial, snapshot, SSE | ✔ | ✔ | ✔ |
+| Crear, mover, asignar, continuar o borrar tickets; cambio manual de estado de agente | ✖ | ✔ | ✔ |
+| Decidir aprobaciones | ✖ | ✔ | ✔ |
+| Memoria del proyecto (escribir) | ✖ | ✔ | ✔ |
+| Crear, editar, archivar o restaurar agentes | ✖ | ✖ | ✔ |
+| `/api/admin/*` (proyecto, reglas, límites, usuarios, auditoría) | ✖ | ✖ | ✔ (+MFA) |
+| Conexión de BD, crear usuarios y cambiar roles | ✖ | ✖ | ✔ (+MFA reciente ≤10 min) |
+
+Si falta la sesión ⇒ 401 `UNAUTHENTICATED`; si falta el rol ⇒ 403 `FORBIDDEN`; si falta MFA reciente ⇒ 403 `MFA_REQUIRED`. Un ADMIN no puede quitarse a sí mismo el rol ni desactivarse si es el **último ADMIN** (409).
+
+### 12.4 Autenticación: endpoints
+| Método | Ruta | Notas |
+|---|---|---|
+| POST | `/api/auth/login` | `{email, password}` → si no hay MFA: crea la sesión y pone la cookie. Si hay MFA: `{mfaRequired:true, loginTicket}` (válido 5 min, un solo uso). |
+| POST | `/api/auth/mfa/verify` | `{loginTicket, code}` → crea la sesión. Con sesión activa y sin ticket: renueva `mfa_verified_at` (reautenticación). |
+| POST | `/api/auth/logout` | Revoca la sesión actual. |
+| POST | `/api/auth/logout-all` | Revoca todas las sesiones del usuario. |
+| GET | `/api/auth/me` | `{id, email, displayName, role, mfaEnabled, mfaRecentUntil}` |
+| POST | `/api/auth/me/password` | `{currentPassword, newPassword}`; revoca las demás sesiones. |
+| POST | `/api/auth/me/mfa/setup` | Devuelve `{secret, otpauthUri}` **una sola vez** (el front lo muestra como texto para la app autenticadora; QR opcional más adelante). |
+| POST | `/api/auth/me/mfa/enable` | `{code}` confirma y activa. |
+| GET / DELETE | `/api/auth/me/sessions[/:id]` | Lista o revoca **mis** sesiones (el `:id` se filtra siempre por `user_id` de la sesión). |
+
+Un ADMIN sin MFA activado solo puede usar `/api/auth/*` hasta activarlo (403 `MFA_SETUP_REQUIRED`).
+**CSRF:** cookie `SameSite=Strict`, y además en métodos que modifican datos se exige que la cabecera `Origin` sea igual a `CORS_ORIGIN`; si no, 403. **CORS:** `credentials: true` con origen exacto (nunca `*`). El front usa `fetch(..., {credentials:'include'})` y `new EventSource(url, {withCredentials:true})`.
+
+### 12.5 Nuevas variables `.env` (API)
+```dotenv
+HOST=127.0.0.1
+NODE_ENV=development
+APP_ENCRYPTION_KEY=        # 32 B base64; lo genera `npm run setup`
+SESSION_IDLE_MINUTES=30
+SESSION_MAX_HOURS=8
+BACKUP_DIR=backups
+BACKUP_INTERVAL_HOURS=24
+BACKUP_KEEP=14
+ADMIN_ALLOW_DB_CHANGE=true # false = la conexión solo se ve en el panel, no se cambia
+```
+
+---
+
+## 13. Panel "Administración" (añadido 2026-11-22)
+
+Vista nueva del FRONT `admin` (entrada **"Administración"** en el Sidebar, solo visible para ADMIN), con los **mismos componentes visuales y estilos** del resto de la app (tarjetas, inputs, botones y pestañas existentes). Pestañas:
+
+| Pestaña | Contenido | Persistencia |
+|---|---|---|
+| **Conexión BD** | Estado actual (modo local o remoto, host, conexión OK/KO, versión de esquema, último backup). Formulario con URL y token (solo escritura; vacío = conservar el actual). Botones **Probar conexión** y **Guardar y conectar**. Aviso: "cambiar de BD no copia los datos". | `.env` de la API (ver §13.2) |
+| **Proyecto** | Nombre de la empresa u oficina, nombre del proyecto, descripción, objetivos y stack tecnológico. En la Fase 2 será el contexto de los agentes. | `app_settings.project` |
+| **Reglas** | Lista ordenable de restricciones: título, descripción, severidad `OBLIGATORIA` o `RECOMENDADA`, activa sí/no. En la Fase 1 solo se guardan; la Fase 2 las inyecta en el orquestador. | `project_rules` |
+| **Límites** | Límites que **la API aplica ya**: `maxAgents` (máximo de agentes activos), `maxActiveTicketsPerAgent` (tickets IN_PROGRESS/REVIEW/AWAITING_APPROVAL por agente) y `requireApprovalForDone` (si está activo, un ticket solo llega a DONE al aprobarse su aprobación; moverlo a mano ⇒ 409). | `app_settings.limits` |
+| **Agentes** | Tabla de agentes (incluidos los archivados): editar nombre, personaje, rol, avatar y system prompt; archivar y restaurar. | `agents` |
+| **Usuarios** | Crear usuario (email, nombre, rol, contraseña inicial), cambiar rol, desactivar, revocar sesiones. | `users` |
+| **Auditoría** | Últimas 200 entradas de `audit_log` (solo lectura). | `audit_log` |
+
+### 13.1 Esquema (`migrations/003_admin.sql`)
+```sql
+CREATE TABLE app_settings (
+  key        TEXT PRIMARY KEY CHECK (key IN ('project','limits')),
+  value      TEXT NOT NULL,          -- JSON validado con zod por clave
+  updated_by TEXT,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE project_rules (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  severity    TEXT NOT NULL DEFAULT 'MUST' CHECK (severity IN ('MUST','SHOULD')),
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  position    INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+```
+Valores por defecto sembrados: `limits = {"maxAgents":20,"maxActiveTicketsPerAgent":3,"requireApprovalForDone":false}`. Si se supera un límite ⇒ 409 `LIMIT_EXCEEDED` con un mensaje claro.
+
+### 13.2 Conexión de BD desde el panel: cómo funciona
+1. `POST /api/admin/db/test {url, authToken?}`: crea un cliente temporal, ejecuta `SELECT 1`, lee `schema_migrations` y lo cierra. No cambia nada. Solo acepta los esquemas `file:`, `libsql://` y `https://`. Tiempo máximo de espera: 5 s.
+2. `PUT /api/admin/db {url, authToken?, copyMyAdmin: true}` (ADMIN + MFA reciente + `ADMIN_ALLOW_DB_CHANGE=true`):
+   1. Prueba la conexión (igual que el paso 1). Si falla ⇒ 422 y no se toca nada.
+   2. Ejecuta las migraciones sobre la BD nueva.
+   3. Si la BD nueva **no tiene usuarios**, copia el ADMIN actual (con su hash y su MFA) para que **no te quedes fuera**. Si tiene usuarios pero no existe tu email ⇒ 409, salvo confirmación explícita.
+   4. Hace un backup del `.env` (`.env.bak`) y escribe solo `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN` de forma atómica (archivo temporal + renombrado), sin tocar el resto.
+   5. Cambia en caliente el cliente: `db/client.ts` expone `getDb()` y `swapDb(newClient)`. **Ningún repositorio guarda el cliente en una variable de módulo**; todos llaman a `getDb()`. El cliente viejo se cierra tras 5 s.
+   6. Cierra todas las sesiones, porque pertenecían a la BD anterior, y emite el evento SSE `system.db_changed`. El front vuelve a pedir el login y el snapshot.
+   7. Registra `admin.db_changed` en la auditoría (host nuevo, **sin token**).
+3. `GET /api/admin/db`: `{mode:'local'|'remote', host, connected, schemaVersion, hasToken, lastBackupAt}`. **Nunca** devuelve el token.
+4. Si la API **arranca sin poder conectar**, no se puede iniciar sesión (los usuarios viven en la BD) ⇒ se corrige editando `.env` a mano. Esto es intencionado: no hay forma de saltarse el login.
+
+### 13.3 Endpoints admin (todos ADMIN + MFA)
+| Método | Ruta |
+|---|---|
+| GET / PUT | `/api/admin/settings/project` |
+| GET / PUT | `/api/admin/settings/limits` |
+| GET / POST | `/api/admin/rules` · PATCH / DELETE `/api/admin/rules/:id` · PUT `/api/admin/rules/order` `{ids:[]}` |
+| GET / PUT | `/api/admin/db` · POST `/api/admin/db/test` |
+| GET / POST | `/api/admin/users` · PATCH `/api/admin/users/:id` (rol, nombre, desactivar) · POST `/api/admin/users/:id/revoke-sessions` |
+| GET | `/api/admin/audit?limit=200` |
+| POST | `/api/agents/:id/restore` (restaura un agente archivado) |
+| POST | `/api/admin/backup` (backup manual inmediato) |
+
+Eventos SSE nuevos: `settings.updated`, `rule.created/updated/deleted`, `system.db_changed`. Las reglas y el proyecto quedan disponibles para la Fase 2 a través de una interfaz `ProjectContextProvider` (solo declarada).
+
+---
+
+## 14. Orden de ejecución prioritario (CEO 2026-11-22)
+Objetivo **M1 = "probar en local con login y Administración"** lo antes posible, con la seguridad desde el primer endpoint:
+1. QA cierra lo que está EN QA (bloques 0–2).
+2. **Seguridad base API:** S01 → S02 → S03 → S04 → S05 → S06 → S07 → S08 → S09 → S10.
+3. Agentes y tiempo real: T30 → T31 → T32 → T60 → T61.
+4. **Administración API:** A01 → A02 → A03 → A04 → A05 → A06 → A07.
+5. **Front M1:** F05 → T70 → T71 → T72 → F01 → F02 → T73 → T74 → T75 → F03 → T77 → T79 → QS-M1.
+6. Higiene: S11 → S12 → S13.
+7. Resto del plan: T40–T46, T50–T54, T62–T64, T76, T78, T7A, T7B, QS1–QS5, T80.
+
+Regla para toda tarea desde ahora: **cada ruta nueva declara `requireRole(...)`** y su test incluye el caso 401/403.
