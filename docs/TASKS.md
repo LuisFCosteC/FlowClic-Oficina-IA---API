@@ -14,7 +14,7 @@ Cada tarea de DEV pasa a `EN QA`; QA la verifica contra su criterio y la marca `
 > - La versión Node (T01–T30, S01, S02 y S03 empezada) queda archivada en la rama `archive/node-express`. **No se prueba ni se sigue.**
 > - T02, T10–T14, T20–T24, T30, S01, S02 y S03 vuelven a `PENDIENTE` para **reimplementarse en Python con los mismos criterios de aceptación**, traducidos con la tabla de PLAN §0.4 (zod → Pydantic, `node:test` → pytest, `npm run` → comandos de §0.6…). T01 queda sustituida por P01.
 > - Las notas DEV de la versión Node que hay más abajo son históricas.
-> - Orden: **P00 → P01 →** T02 → T10–T14 → T20–T24 → T30 → y después PLAN §14 desde el punto 2.
+> - Orden: **V00 (front, trivial) → P00 → P01 →** T02 → T10–T14 → T20–T24 → T30 → y después PLAN §14 desde el punto 2.
 
 ## Bloque P: arranque Python (va antes que todo)
 
@@ -200,3 +200,33 @@ Después de T80: el Arquitecto revisa el código, este archivo y `QA_REPORT.md`,
 - **S01** — middleware/security.ts (requestId + cabeceras CSP default-src 'none', nosniff, no-referrer, X-Frame-Options DENY), x-powered-by off, express.json 100kb (413 PAYLOAD_TOO_LARGE), HOST (def. 127.0.0.1) en env.ts/server.ts/.env.example, errores 500 logueados con requestId. /api/health ahora responde solo {ok:true}; el detalle con sesión se añade en S09 (cuando exista requireAuth). Tests en test/health.test.ts. Probar: `curl -i localhost:4000/api/health`; `npm test`.
 - **S02** — `npm run setup` (scripts/setup.ts): crea .env desde .env.example con APP_ENCRYPTION_KEY y SESSION_SECRET aleatorios (32 B base64); nunca sobrescribe. .env.example con variables de PLAN §12.5 (secretos vacíos); config/parse.ts (zod: en production exigen claves; APP_ENCRYPTION_KEY debe ser 32 B; vacío = no definida) y config/env.ts (carga y sale con exit 1). .gitignore + backups/ y .env.bak. Tests: test/env-setup.test.ts. Probar: `npm run setup` dos veces (la 2ª no cambia el .env); `npm test`.
 - **S03** — migrations/002_security.sql con users, sessions y audit_log exactos de PLAN §12.2. Test: test/security-schema.test.ts (email repetido → UNIQUE, rol inválido → CHECK, semilla sin usuarios). Probar: `npm run db:migrate`; `npm test`.
+
+
+---
+
+# AMPLIACIÓN 2026-11-22 (b): Rediseño visual y nueva Oficina 3D (PLAN §15)
+
+Orden global (CEO, "primero que funcione"): **V00 → M1 (P00, P01, T02… hasta QS-M1) → V3D01–V3D07 → VUI01–VUI08**.
+
+## Bloque V: menú, sistema visual y 3D (FRONT)
+
+| ID | Descripción | Responsable | Estado | Criterio de aceptación |
+|---|---|---|---|---|
+| V00 | Reordenar `NAV_ITEMS` del Sidebar y `MODULE_HEADERS`: To-Do & Pipeline de Tareas, Calendario de Proyectos, Cerebro FlowClic, Oficina IA 3D (y Administración cuando exista F03). Módulo por defecto `kanban`. | DEV | PENDIENTE | Al abrir la app se ve el Kanban; el Sidebar muestra el orden exacto de PLAN §15.1; `npm run lint` y `npm run build` pasan. |
+| V3D01 | Refactor sin cambios visuales: dividir `sceneBuilder.ts` en `three/rooms/`, `three/props/` y `three/textures/` (PLAN §15.3). | DEV | PENDIENTE | La escena se ve igual que antes; ningún archivo de `three/` supera las 400 líneas. |
+| V3D02 | Rótulos y textos: eliminar "ZONA A/B/C" en la escena, la leyenda, `STATUS_META`, `CreateAgentModal`, Cerebro y los mensajes. Nombres nuevos: **Laboratorio**, **Oficina de Sheldon**, **Zona de descanso**. | DEV | PENDIENTE | `grep -rni "zona [abc]\|apartamento bbt\|pizarra de sheldon" src` sin resultados. |
+| V3D03 | Laboratorio tecnológico: piso con retícula luminosa, tiras LED, racks con LEDs parpadeantes instanciados y bandejas de cables. Puestos fijos por agente (orden de creación, fila extra si hay más de 9) con **placa** "Puesto de *Nombre* · *Rol*". | DEV | PENDIENTE | Cada agente de la API tiene su puesto con placa legible; un agente nuevo obtiene un puesto sin recargar. |
+| V3D04 | "Qué está haciendo cada uno": textura de canvas en el monitor de cada puesto (título del ticket IN_PROGRESS, id corto, prioridad, animación de código; "Sin asignación" si no tiene) + etiqueta flotante sobre el avatar (nombre, rol, `StatusPill`, tarea truncada; se amplía al pasar el ratón; clic abre el panel). Aviso rojo en el puesto si está `BLOCKED`; icono de batería si está `SLEEP_QUOTA`. | DEV | PENDIENTE | Mover un ticket a IN_PROGRESS desde otra pestaña actualiza el monitor y la etiqueta en < 1 s; la textura solo se redibuja cuando cambian los datos. |
+| V3D05 | **Oficina de Sheldon** según PLAN §15.3 (sala cerrada beige, estanterías empotradas, archivadores grises, escritorio simétrico con monitor, teléfono, portalápices y taza con rayo, pizarras verdes de tiza con ecuaciones, 2 diplomas, retrato, banderín y figura). Sheldon en su escritorio; los agentes `REVIEW`/`BLOCKED` frente a las pizarras. **Sin logos ni marcas.** | DEV | PENDIENTE | Revisión visual del CEO; no aparece ningún logo ni marca registrada. |
+| V3D06 | **Zona de descanso** según PLAN §15.3 (sofá marrón con el sitio de Sheldon, TV, mesa de centro con comida, laptops y cómics, cocina abierta con barra, taburetes y nevera con imanes, escritorios junto a los ventanales, pizarras blancas con ruedas, estanterías con cajas de cómics y figuras, espada, ADN, busto, puerta con ascensor y cinta amarilla). `IDLE`/`SLEEP_QUOTA` sentados en el sofá o los taburetes; Sheldon IDLE en su sitio. Eliminar las literas/pods actuales. | DEV | PENDIENTE | Revisión visual del CEO; con 8 agentes IDLE ninguno se solapa. |
+| V3D07 | Rendimiento y limpieza: medir triángulos y draw calls (`renderer.info`) y cumplir ≤150k/≤250; eliminar el "ciclo de demo"; respetar `prefers-reduced-motion`; liberar geometrías y texturas al desmontar la vista. | DEV | PENDIENTE | Cifras anotadas en TASKS; navegar 10 veces entre módulos no hace crecer la memoria de GPU (`renderer.info.memory`). |
+| VUI01 | Tokens de diseño en `src/index.css` (`@theme`) según PLAN §15.2; reemplazar los hex sueltos. | DEV | PENDIENTE | `grep -rnE "#[0-9A-Fa-f]{6}" src/components src/ui` solo encuentra colores de avatar o datos, no estilos. |
+| VUI02 | Kit `src/ui/` (Button, Card, Badge, StatusPill, Input, Textarea, Select, Modal, Tabs, Table, EmptyState, Skeleton, Toast, Tooltip, Avatar) con foco visible y soporte de teclado. | DEV | PENDIENTE | Cada componente usa solo tokens; el Modal atrapa el foco y se cierra con Esc. |
+| VUI03 | Layout: Sidebar renovado (grupos, contadores), cabecera con buscador global de tickets, menú de usuario e indicador de conexión SSE. | DEV | PENDIENTE | Al parar la API, el indicador pasa a rojo y vuelve a verde al reconectar. |
+| VUI04 | Kanban renovado: tarjetas nuevas, **drag & drop nativo** HTML5 (las flechas se mantienen), panel lateral de detalle con historial del ticket, asignar y continuar. | DEV | PENDIENTE | Arrastrar una tarjeta cambia el estado vía API y se refleja en otra pestaña; también se puede mover solo con teclado. |
+| VUI05 | Calendario de Proyectos con el kit (misma funcionalidad). | DEV | PENDIENTE | Las funciones actuales siguen funcionando; estilo consistente. |
+| VUI06 | Cerebro FlowClic con el kit (cola de aprobaciones, vigilador de agentes con los 5 estados). | DEV | PENDIENTE | Igual que arriba. |
+| VUI07 | Administración y modales (crear agente, login, MFA) con el kit. | DEV | PENDIENTE | Igual que arriba. |
+| VUI08 | Accesibilidad y responsive: contraste AA, navegación completa con teclado, `prefers-reduced-motion`, usable desde 1280 px; en móvil Sidebar plegable y Kanban en lista. Estados vacío, carga y error en cada vista. | DEV | PENDIENTE | Lighthouse Accessibility ≥ 90 en Kanban y Administración. |
+| QV1 | QA visual y funcional del 3D: los 5 estados en sus espacios, placas, monitores en tiempo real, sin marcas, rendimiento (cifras de V3D07). | QA | PENDIENTE | Checklist con capturas en QA_REPORT. |
+| QV2 | QA del rediseño: todas las vistas con el kit, teclado, contraste, responsive y Lighthouse. | QA | PENDIENTE | Resultados en QA_REPORT. |

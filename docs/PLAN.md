@@ -831,3 +831,75 @@ Objetivo **M1 = "probar en local con login y Administración"** lo antes posible
 7. Resto del plan: T40–T46, T50–T54, T62–T64, T76, T78, T7A, T7B, QS1–QS5, T80.
 
 Regla para toda tarea desde ahora: **cada ruta nueva declara `requireRole(...)`** y su test incluye el caso 401/403.
+
+> **Prioridad confirmada por el CEO (2026-11-22): "primero que funcione".**
+> Orden global: **V00** (menú, cambio trivial) → **M1** (P00, P01, núcleo de la API en Python, seguridad, Administración y front conectado: puntos 0–5 de arriba) → **V3D** (nueva oficina 3D, §15.3) → **VUI** (mejora visual del resto, §15.2) → resto del plan.
+> Python 3.13 y las dependencias de §0.2 quedaron **aprobados e instalados por el Arquitecto**.
+
+---
+
+## 15. Rediseño visual y nueva oficina 3D (CEO 2026-11-22)
+
+> Esto **sustituye** la regla inicial "no rediseñar el FRONT": ahora el CEO pide mejorar la parte visual de todo el proyecto. Siguen sin añadirse dependencias: Tailwind, motion, lucide y three ya están instalados.
+
+### 15.1 Orden de módulos (V00)
+Orden del Sidebar y de `ActiveModule`:
+1. **To-Do & Pipeline de Tareas** (`kanban`). Es el módulo **por defecto** al entrar.
+2. **Calendario de Proyectos** (`roadmap`)
+3. **Cerebro FlowClic** (`cerebro`)
+4. **Oficina IA 3D** (`colmena3d`)
+5. **Administración** (`admin`, solo ADMIN, F03)
+
+El botón de la cabecera ("Ver Oficina 3D" / "Abrir Cerebro") se mantiene.
+
+### 15.2 Sistema visual de toda la app (VUI)
+Dirección: **centro de mando tecnológico, sobrio y legible**. Base oscura actual (`#070B12`), un solo acento principal (cian), colores de estado consistentes y sin efectos que dificulten la lectura.
+- **Tokens** en `src/index.css` con `@theme` de Tailwind 4:
+  - colores: fondo, superficie 1/2/3, borde, texto 1/2/3, acento, y estados `working`, `review`, `blocked`, `sleep`, `idle`, `danger`, `success`;
+  - radios, sombras y espaciado;
+  - tipografía: Plus Jakarta Sans para el texto y JetBrains Mono para datos y ids, que ya están cargadas.
+  - **Prohibido** usar hex sueltos en los componentes: todo sale de los tokens.
+- **Kit de UI** en `src/ui/`: `Button` (primary, secondary, ghost, danger; tamaños), `Card`, `Badge` y `StatusPill` (los 5 estados), `Input`, `Textarea`, `Select`, `Modal`, `Tabs`, `Table`, `EmptyState`, `Skeleton`, `Toast` (para errores de API), `Tooltip` y `Avatar` (color e iniciales del agente). Todas las vistas usan el kit.
+- **Layout:** Sidebar con grupos e indicadores (agentes activos, aprobaciones pendientes), cabecera con buscador global de tickets, menú de usuario y estado de conexión en tiempo real (punto verde, ámbar o rojo según el SSE).
+- **Kanban:** columnas con contador y color de estado; tarjetas con prioridad, agente (avatar), proyecto y tiempo relativo; **arrastrar y soltar con HTML5 nativo** (sin librería), conservando los botones de flecha como alternativa accesible; panel lateral de detalle del ticket con su **historial** (`GET /tickets/:id/events`).
+- **Calendario, Cerebro y Administración:** se rehacen con el kit, manteniendo sus funciones.
+- **Accesibilidad:** contraste AA, foco visible, todo usable con teclado y `prefers-reduced-motion` respetado (desactiva animaciones y la cámara automática del 3D).
+- **Responsive:** utilizable a partir de 1280 px de ancho. En móvil, Sidebar plegable y Kanban en lista.
+- **Estados vacíos, de carga y de error** en cada vista. Nada de pantallas en blanco.
+
+### 15.3 Nueva Oficina IA 3D (V3D)
+Se eliminan los rótulos "ZONA A/B/C". Quedan **tres espacios con nombre propio**:
+
+| Espacio | Quién está ahí | Ambiente |
+|---|---|---|
+| **Laboratorio** | Agentes `WORKING`, cada uno **en su puesto** | Tecnológico: piso con retícula luminosa, tiras LED, racks de servidores con LEDs parpadeantes, bandejas de cables, monitores emisivos |
+| **Oficina de Sheldon** | Sheldon (en su escritorio); los agentes `REVIEW` y `BLOCKED` frente a sus pizarras | Inspirada en su oficina universitaria (detalle abajo) |
+| **Zona de descanso** | Agentes `IDLE` y `SLEEP_QUOTA` (Sheldon, cuando está IDLE, **en su sitio del sofá**) | Inspirada en la sala de un apartamento geek de Pasadena (detalle abajo) |
+
+**Puestos con nombre (Laboratorio):**
+- Cada agente tiene un **puesto fijo**: el índice se asigna por orden de creación del agente, con los 9 slots actuales; si hay más de 9, se crea una fila nueva.
+- Cada escritorio lleva una **placa** con "Puesto de *Nombre*" y su rol (p. ej. "Puesto de Leonard · Senior Full-Stack"). La placa sigue visible aunque el agente no esté.
+- **El monitor del puesto muestra lo que está haciendo:** una textura de canvas con el título de su ticket IN_PROGRESS, el id corto, la prioridad y una animación de "código". Si no tiene ticket: "Sin asignación". Se actualiza con el SSE.
+- **Etiqueta flotante** sobre cada avatar: nombre, rol, `StatusPill` y la tarea actual truncada. Al pasar el ratón se amplía; al hacer clic se abre el panel lateral existente (con su ticket y botones de estado).
+- Un agente `BLOCKED` muestra un aviso rojo intermitente en su puesto. `SLEEP_QUOTA` muestra un icono de batería baja en la zona de descanso.
+
+**Oficina de Sheldon** (sala rectangular cerrada con puerta abierta hacia el laboratorio):
+- Paredes crema/beige, estanterías de madera empotradas con libros y archivadores metálicos grises.
+- **Escritorio impecable y simétrico:** monitor, teléfono fijo, portalápices alineado y taza roja con un rayo.
+- **Pizarras verdes de tiza** con cálculos de física (textura de canvas con ecuaciones dibujadas: Schrödinger, Einstein, Maxwell…). En la Fase 2 podrán mostrar el ticket en revisión.
+- **Decoración:** dos diplomas enmarcados, un retrato enmarcado de un científico, un banderín universitario naranja y una pequeña figura de superhéroe roja sobre los libros.
+
+**Zona de descanso** (sala de apartamento):
+- **Sofá de cuero marrón** frente al televisor, con "el sitio de Sheldon" en el extremo izquierdo (cojín marcado).
+- **Mesa de centro** de madera baja con cajas de comida para llevar, laptops y cómics.
+- **Cocina abierta** al fondo: barra alta con taburetes y nevera con imanes.
+- **Escritorios junto a los ventanales** con monitores y torres de PC, y **pizarras blancas con ruedas** con fórmulas (cuerdas, materia oscura).
+- **Estanterías** con cajas blancas de cómics y figuras de acción; **espada** decorativa colgada; **maqueta de ADN** (ya existe la hélice, se reubica) y un **busto** decorativo.
+- **Puerta** al descansillo, con un ascensor fuera de servicio y cinta amarilla de precaución.
+
+**Restricciones técnicas del 3D:**
+- **Todo procedural con Three.js** (geometrías y texturas de canvas), sin descargar modelos.
+- **Sin logos ni marcas registradas** (Flash, Linterna Verde, Caltech, Star Wars/Trek, Game of Thrones, Spock, fotos reales de Einstein…): se usan elementos genéricos que evocan el ambiente (taza con rayo, banderín sin escudo, figura genérica, retrato estilizado). Así se evitan problemas de propiedad intelectual si el proyecto se publica.
+- **Rendimiento:** ≤ 150 000 triángulos y ≤ 250 draw calls (`InstancedMesh` para libros, cómics, LEDs y sillas; geometrías estáticas fusionadas); 60 fps en GPU integrada a 1080p; las texturas de canvas solo se redibujan cuando cambian los datos.
+- `sceneBuilder.ts` (1 030 líneas) se divide en `three/rooms/lab.ts`, `three/rooms/sheldonOffice.ts`, `three/rooms/restZone.ts`, `three/props/*.ts` y `three/textures/*.ts`.
+- La animación de "ciclo de demo" (que hace caminar a un agente por las tres zonas) se elimina o queda solo con datos de ejemplo: el estado real viene de la API.
