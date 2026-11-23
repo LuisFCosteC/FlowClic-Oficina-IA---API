@@ -1,6 +1,12 @@
 # FlowClic Oficina IA — Plan de Arquitectura · Fase 1
 
-> Estado: **BORRADOR, pendiente de aprobación del CEO**
+> Estado: **APROBADO por el CEO (2026-11-22)**: arranca la implementación.
+>
+> Decisiones por defecto (vigentes mientras el CEO no diga otra cosa):
+> - Dependencias de §8 aprobadas. Cualquier otra requiere preguntar.
+> - Añadidos mínimos al FRONT de D6/T76/T77 aprobados (mismos estilos existentes).
+> - FRONT usa npm; `bun.lock` se **conserva** hasta que el CEO confirme borrarlo.
+> - Repos: `origin` en GitHub (`FlowClic-Oficina-IA---API` y `---FRONT`). Trabajo en `dev`; nada se mergea a `main` sin dictamen del Arquitecto.
 > Alcance: app local (API + FRONT conectado). **Sin agentes IA**: ninguna llamada a modelos, sin orquestador, sin automatización.
 
 ---
