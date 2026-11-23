@@ -790,7 +790,7 @@ CREATE TABLE project_rules (
 ```
 Valores por defecto sembrados: `limits = {"maxAgents":20,"maxActiveTicketsPerAgent":3,"requireApprovalForDone":false}`. Si se supera un límite ⇒ 409 `LIMIT_EXCEEDED` con un mensaje claro.
 
-### 13.2 Conexión de BD desde el panel: cómo funciona
+### 13.2 Conexión de BD desde el panel: cómo funciona (⚠ ahora se guarda en la bóveda cifrada, ver §16; donde aquí dice `.env`, léase bóveda)
 1. `POST /api/admin/db/test {url, authToken?}`: crea un cliente temporal, ejecuta `SELECT 1`, lee `schema_migrations` y lo cierra. No cambia nada. Solo acepta los esquemas `file:`, `libsql://` y `https://`. Tiempo máximo de espera: 5 s.
 2. `PUT /api/admin/db {url, authToken?, copyMyAdmin: true}` (ADMIN + MFA reciente + `ADMIN_ALLOW_DB_CHANGE=true`):
    1. Prueba la conexión (igual que el paso 1). Si falla ⇒ 422 y no se toca nada.
@@ -903,3 +903,104 @@ Se eliminan los rótulos "ZONA A/B/C". Quedan **tres espacios con nombre propio*
 - **Rendimiento:** ≤ 150 000 triángulos y ≤ 250 draw calls (`InstancedMesh` para libros, cómics, LEDs y sillas; geometrías estáticas fusionadas); 60 fps en GPU integrada a 1080p; las texturas de canvas solo se redibujan cuando cambian los datos.
 - `sceneBuilder.ts` (1 030 líneas) se divide en `three/rooms/lab.ts`, `three/rooms/sheldonOffice.ts`, `three/rooms/restZone.ts`, `three/props/*.ts` y `three/textures/*.ts`.
 - La animación de "ciclo de demo" (que hace caminar a un agente por las tres zonas) se elimina o queda solo con datos de ejemplo: el estado real viene de la API.
+
+
+---
+
+## 16. Secretos cifrados: conexión de BD y claves API de agentes (CEO 2026-11-22)
+
+> **Sustituye** lo que §9, §12.5 y §13.2 decían sobre guardar `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN` en el `.env`. Requisito del CEO: **la URL y el token de la BD no viven en el `.env`**, se modifican desde el front, y **las claves API de los agentes se guardan cifradas en la BD**.
+
+### 16.1 Dónde vive cada cosa
+| Dato | Dónde | Cómo |
+|---|---|---|
+| **Clave maestra** `APP_MASTER_KEY` (32 B, base64) | `.env`. Es **el único secreto** que queda ahí: algo tiene que abrir la caja fuerte. La genera `scripts/setup_env.py`, con permisos solo para el usuario (icacls/0600). | — |
+| URL y token de la BD | **Bóveda local** `data/vault.db` (SQLite de la biblioteca estándar, ignorada por git), fuera de la BD principal: la API necesita la URL antes de poder conectarse | AES-256-GCM, clave derivada con HKDF (`info="flowclic/vault/v1"`), AAD = nombre del secreto |
+| Claves API de los agentes (Anthropic, OpenAI, Google…) | **BD principal** (Turso), tabla `agent_credentials` | AES-256-GCM, HKDF (`info="flowclic/agent-credentials/v1"`), AAD = `agent_id|provider|id` (un texto cifrado no se puede mover a otra fila) |
+| Secreto MFA de los usuarios | BD principal, `users.mfa_secret_enc` | Igual, con `info="flowclic/mfa/v1"` |
+
+- Cada texto cifrado guarda `key_version`. El comando `python -m app.security.rotate_key` vuelve a cifrar todo con una clave maestra nueva.
+- **Riesgo aceptado y documentado:** si se pierde `APP_MASTER_KEY`, la bóveda y las credenciales no se pueden leer. Debe guardarse en un gestor de contraseñas; se indica en `docs/DRP.md`. Los backups de la BD llevan las credenciales **cifradas**: un backup robado no las expone.
+- Evolución posible: guardar la clave maestra en el Administrador de credenciales de Windows (paquete `keyring`), con OK del CEO.
+
+### 16.2 Esquema
+`data/vault.db` (local):
+```sql
+CREATE TABLE secrets (
+  name        TEXT PRIMARY KEY CHECK (name IN ('db.url','db.auth_token')),
+  ciphertext  BLOB NOT NULL,
+  nonce       BLOB NOT NULL,
+  key_version INTEGER NOT NULL,
+  updated_by  TEXT,
+  updated_at  TEXT NOT NULL
+);
+```
+`migrations/003_agent_credentials.sql` (BD principal; la de Administración pasa a ser la `004_admin.sql`):
+```sql
+CREATE TABLE agent_credentials (
+  id          TEXT PRIMARY KEY,
+  agent_id    TEXT NOT NULL REFERENCES agents(id),
+  provider    TEXT NOT NULL CHECK (provider IN ('anthropic','openai','google','other')),
+  label       TEXT NOT NULL,
+  ciphertext  BLOB NOT NULL,
+  nonce       BLOB NOT NULL,
+  key_version INTEGER NOT NULL,
+  last4       TEXT NOT NULL,          -- solo para mostrar "••••abcd"
+  created_by  TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  rotated_at  TEXT,
+  revoked_at  TEXT
+);
+CREATE UNIQUE INDEX ux_agent_cred_active ON agent_credentials(agent_id, provider) WHERE revoked_at IS NULL;
+```
+
+### 16.3 Primer arranque: modo SETUP
+- Si la bóveda no tiene `db.url`, la API arranca en **modo SETUP**: solo responden `/api/health` y `/api/setup/*`, y todo lo demás devuelve 503 `SETUP_REQUIRED`.
+- Al arrancar en ese modo, la API **imprime en su consola un código de un solo uso** (p. ej. `K7Q2-9XMP-4HDL`), que caduca en 30 min. El código se exige en cada llamada de setup, y solo se aceptan peticiones desde `127.0.0.1`/`::1`.
+- Endpoints:
+  - `GET /api/setup/status` → `{setupRequired, hasDatabase, hasAdmin}`.
+  - `POST /api/setup/database {setupCode, url, authToken}` → prueba la conexión, la guarda cifrada en la bóveda, migra y cambia en caliente.
+  - `POST /api/setup/admin {setupCode, email, displayName, password}` → crea el **primer** ADMIN, que debe activar MFA en su primer login.
+- Cuando existe la BD y un ADMIN, **el setup se cierra**: los endpoints devuelven 404. Solo se reabre borrando la bóveda a mano.
+- El FRONT muestra un **asistente de configuración** (F06) cuando `setupRequired=true`.
+
+### 16.4 Importar el `.env` actual y dejarlo limpio
+- Al arrancar, si el `.env` todavía tiene `TURSO_DATABASE_URL` o `TURSO_AUTH_TOKEN` y la bóveda está vacía:
+  1. los importa cifrados a la bóveda;
+  2. **elimina esas líneas del `.env`** con escritura atómica y **sin copia de seguridad** (la copia sería otro secreto en claro);
+  3. registra en el log solo "conexión importada a la bóveda".
+- `setup_env.py` y `.env.example` dejan de incluir `TURSO_*`.
+- `admin:create` (CLI) se mantiene como alternativa al asistente.
+
+### 16.5 Desde el FRONT (Administración)
+- **Conexión BD** (A05, ahora sobre la bóveda):
+  - muestra modo, host y estado, **nunca** el token;
+  - permite **Probar** y **Guardar y conectar** (ADMIN + MFA reciente);
+  - el token es un campo `type=password`, se envía una sola vez y se vacía al guardar.
+- **Agentes → Credenciales API** (por agente):
+  - lista con proveedor, etiqueta, `••••last4`, fecha de creación y de rotación;
+  - acciones Añadir, Rotar (sustituye la clave) y Revocar;
+  - la API **nunca devuelve la clave en claro**, ni siquiera al ADMIN;
+  - cada operación queda en la auditoría **sin** el valor.
+- El navegador no guarda secretos (ni en `localStorage` ni en el estado global); los campos se limpian al desmontar.
+
+### 16.6 Endpoints nuevos
+| Método | Ruta | Permiso |
+|---|---|---|
+| GET | `/api/admin/agents/{id}/credentials` | ADMIN + MFA |
+| POST | `/api/admin/agents/{id}/credentials` `{provider,label,secret}` | ADMIN + MFA reciente |
+| POST | `/api/admin/agents/{id}/credentials/{credId}/rotate` `{secret}` | ADMIN + MFA reciente |
+| DELETE | `/api/admin/agents/{id}/credentials/{credId}` (revoca) | ADMIN + MFA reciente |
+| GET/POST | `/api/setup/*` (§16.3) | Código de setup + localhost |
+
+### 16.7 Fase 2
+Interfaz `SecretsProvider.get_agent_key(agent_id, provider) -> str`, que solo se declara en la Fase 1. El orquestador descifra **en memoria** justo antes de llamar al modelo y nunca registra, devuelve ni pasa la clave a un modelo (refuerza el riesgo #18).
+
+---
+
+## 17. Kanban: arrastrar y soltar (CEO 2026-11-22, adelantado)
+El drag & drop del Kanban (antes incluido en VUI04) se **adelanta** como tarea K01:
+- HTML5 nativo, sin librerías.
+- Al soltar en una columna: con la API conectada se llama a `PATCH /api/tickets/{id}/status`; antes de conectar, se actualiza el estado local.
+- Resaltado de la columna destino, tarjeta "fantasma" y se mantienen las flechas y la alternativa por teclado.
+- Si la API rechaza el movimiento (409/422), la tarjeta vuelve a su columna y se muestra el error.
