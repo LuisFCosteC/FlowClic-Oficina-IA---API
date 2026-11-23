@@ -13,6 +13,9 @@ from app.domain.schemas import (
     AgentCreate,
     AgentStatusBody,
     AgentUpdate,
+    Limits,
+    ModelConfig,
+    Permissions,
     TicketAssignBody,
     TicketCreate,
     TicketUpdate,
@@ -25,13 +28,20 @@ def make_agent() -> Agent:
         name="Howard",
         character="Howard",
         role="Hardware",
+        role_type="CUSTOM",
         status="IDLE",
         avatar=AgentAvatar(color="#10B981", hair_style="bun"),
+        functions=[],
+        rules=[],
+        restrictions=[],
+        permissions=Permissions(),
+        model=ModelConfig(primary="claude-sonnet-5-5"),
+        limits=Limits(max_tokens_per_ticket=1000, max_usd_per_day=1, max_retries=3),
         system_prompt="",
-        model_tier="sonnet_pro",
         is_cto=False,
         current_task=None,
         project=None,
+        consecutive_failures=0,
         created_at="2026-11-22T10:00:00.000Z",
         updated_at="2026-11-22T10:00:00.000Z",
         archived_at=None,
@@ -40,19 +50,25 @@ def make_agent() -> Agent:
 
 def test_la_salida_es_camel_case() -> None:
     data = make_agent().model_dump(by_alias=True)
-    assert {"systemPrompt", "modelTier", "isCto", "currentTask", "createdAt", "archivedAt"} <= set(
-        data
-    )
+    assert {
+        "systemPrompt",
+        "roleType",
+        "isCto",
+        "currentTask",
+        "consecutiveFailures",
+        "archivedAt",
+    } <= set(data)
     assert data["avatar"] == {"color": "#10B981", "glasses": None, "hairStyle": "bun"}
     assert "system_prompt" not in data
 
 
 def test_la_entrada_acepta_camel_case() -> None:
     m = AgentCreate.model_validate(
-        {"name": "A", "role": "r", "modelTier": "haiku_flash", "isCto": True}
+        {"name": "A", "role": "r", "roleType": "QA", "model": {"primary": "gemini-pro"}}
     )
-    assert m.model_tier == "haiku_flash"
-    assert m.is_cto is True
+    assert m.role_type == "QA"
+    assert m.model.primary == "gemini-pro"
+    assert m.limits.max_retries == 3
 
 
 def test_la_entrada_rechaza_campos_desconocidos() -> None:
@@ -65,6 +81,10 @@ def test_la_entrada_rechaza_campos_desconocidos() -> None:
 def test_agent_update_no_admite_status() -> None:
     with pytest.raises(ValidationError):
         AgentUpdate.model_validate({"status": "IDLE"})
+    with pytest.raises(ValidationError):
+        AgentUpdate.model_validate({"systemPrompt": "hackeado"})
+    with pytest.raises(ValidationError):
+        AgentCreate.model_validate({"name": "A", "role": "r", "isCto": True})
     assert AgentUpdate.model_validate({"role": "QA"}).model_dump(exclude_unset=True) == {
         "role": "QA"
     }

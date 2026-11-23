@@ -57,48 +57,95 @@ class AgentAvatar(StrictInput):
     hair_style: HairStyle | None = None
 
 
+RoleType = Literal["CTO", "DEV_BACKEND", "DEV_FRONTEND", "QA", "CUSTOM"]
+WorkspaceLevel = Literal["none", "read", "tests", "qa_report", "write"]
+
+
+class Permissions(CamelModel):
+    """Permisos DUROS (los aplica la API). PLAN §19.3."""
+
+    workspaces: dict[str, WorkspaceLevel] = Field(default_factory=dict)
+    actions: list[str] = Field(default_factory=list)
+    ticket_transitions: list[tuple[TicketStatus, TicketStatus]] = Field(default_factory=list)
+    only_assigned_tickets: bool = True
+
+
+class ModelConfig(CamelModel):
+    primary: str
+    fallback: str | None = None
+    fallback_condition: str | None = None
+
+
+class Limits(CamelModel):
+    max_tokens_per_ticket: Annotated[int, Field(ge=1, le=10_000_000)]
+    max_usd_per_day: Annotated[float, Field(ge=0, le=100_000)]
+    max_retries: Annotated[int, Field(ge=0, le=20)]
+
+
 class Agent(CamelModel):
     id: str
     name: str
     character: str
     role: str
+    role_type: RoleType
     status: AgentStatus
     avatar: AgentAvatar
+    functions: list[str]
+    rules: list[str]
+    restrictions: list[str]
+    permissions: Permissions
+    model: ModelConfig
+    limits: Limits
     system_prompt: str
-    model_tier: ModelTier
     is_cto: bool
     current_task: str | None
     project: str | None
+    consecutive_failures: int
     created_at: str
     updated_at: str
     archived_at: str | None
 
 
+ListItem = Annotated[str, Field(min_length=1, max_length=500)]
+ProfileList = Annotated[list[ListItem], Field(max_length=40)]
+
+
 class AgentCreate(StrictInput):
+    """Perfil de un agente nuevo. El prompt y `is_cto` los genera el servidor (G02)."""
+
     name: Name
     role: ShortText
+    role_type: RoleType = "CUSTOM"
     character: Name | None = None
-    status: AgentStatus | None = None
     avatar: AgentAvatar | None = None
-    system_prompt: Prompt | None = None
-    model_tier: ModelTier | None = None
-    is_cto: bool | None = None
+    functions: ProfileList = Field(default_factory=list)
+    rules: ProfileList = Field(default_factory=list)
+    restrictions: ProfileList = Field(default_factory=list)
+    permissions: Permissions = Field(default_factory=Permissions)
+    model: ModelConfig = Field(default_factory=lambda: ModelConfig(primary="claude-sonnet-5-5"))
+    limits: Limits = Field(
+        default_factory=lambda: Limits(
+            max_tokens_per_ticket=150_000, max_usd_per_day=8, max_retries=3
+        )
+    )
     project: ProjectName | None = None
-    current_task: Annotated[str, Field(max_length=500)] | None = None
 
 
 class AgentUpdate(StrictInput):
-    """Parcial. No admite `status` (tiene su endpoint propio)."""
+    """Parcial. No admite `status` (endpoint propio) ni `system_prompt` (lo genera el servidor)."""
 
     name: Name | None = None
     role: ShortText | None = None
+    role_type: RoleType | None = None
     character: Name | None = None
     avatar: AgentAvatar | None = None
-    system_prompt: Prompt | None = None
-    model_tier: ModelTier | None = None
-    is_cto: bool | None = None
+    functions: ProfileList | None = None
+    rules: ProfileList | None = None
+    restrictions: ProfileList | None = None
+    permissions: Permissions | None = None
+    model: ModelConfig | None = None
+    limits: Limits | None = None
     project: ProjectName | None = None
-    current_task: Annotated[str, Field(max_length=500)] | None = None
 
 
 class AgentStatusBody(StrictInput):
