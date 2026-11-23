@@ -673,6 +673,23 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Pendiente revisión Dev Senior.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 468ms). Commit `27b9a81` en `dev` del FRONT.
 
+- **ADM-ERR (Dev Junior, 2026-11-23, EN QA)** — Errores claros con tarjeta Reintentar y mensaje de red en Administración:
+  - Creado componente reusable `AdminErrorCard` con estilos nativos de la aplicación: icono de alerta, título, mensaje descriptivo y botón de acción con icono `RefreshCw` animado en recarga.
+  - Implementado manejo estandarizado de error de red: cuando la API no responde o falla la conexión de red (`status: 0`, `NETWORK` o `fetch failure`), se formatea y despliega exactamente el mensaje solicitado: *"No se pudo conectar con la API (¿está arrancada en el puerto 4000?)"*.
+  - Integrado en los 8 paneles de Administración:
+    1. **Proyecto (`ProjectSettingsPanel`):** Si falla la carga inicial de `GET /api/admin/settings/project`, muestra `AdminErrorCard` con botón "Reintentar" que invoca `fetchProjectSettings`.
+    2. **Reglas (`RulesPanel`):** Si falla `GET /api/admin/rules`, despliega la tarjeta con "Reintentar" manteniendo abajo las 6 restricciones globales bloqueadas.
+    3. **Límites (`LimitsPanel`):** Si falla `GET /api/admin/settings/limits`, despliega `AdminErrorCard` con "Reintentar" que invoca `fetchLimits`.
+    4. **Auditoría (`AuditPanel`):** Si falla `GET /api/admin/audit`, despliega la tarjeta con "Reintentar" que invoca `fetchAudit`.
+    5. **Usuarios (`UsersPanel`):** Si falla `GET /api/admin/users`, despliega la tarjeta con "Reintentar" que invoca `fetchUsers`.
+    6. **Conexión BD (`DbConnectionPanel`):** Si falla `GET /api/admin/db`, despliega la tarjeta con "Reintentar" que invoca `fetchDbInfo`.
+    7. **Espacios de trabajo (`WorkspacesPanel`):** Si falla `GET /api/admin/workspaces`, despliega la tarjeta con "Reintentar" que invoca `fetchWorkspaces`.
+    8. **Conexiones API (`ConnectionsPanel`):** Si falla `GET /api/admin/credentials` o `/api/models`, despliega la tarjeta con "Reintentar" que invoca `fetchData`.
+    - Pestaña **Agentes (`AdminView`)**: También protegida con `AdminErrorCard` y "Reintentar" si la carga de agentes falla.
+  - Probar: Detener la API o simular error de red; entrar a cada una de las pestañas de Administración; verificar que en lugar de una pantalla en blanco o rota aparece la tarjeta de error roja con *"No se pudo conectar con la API (¿está arrancada en el puerto 4000?)"* y el botón "Reintentar"; reanudar la API y pulsar "Reintentar"; comprobar que los datos se cargan correctamente.
+  - Pendiente revisión Dev Senior.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 562ms). Commit `0e8ebd7` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
