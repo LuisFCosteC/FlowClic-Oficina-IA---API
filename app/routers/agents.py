@@ -83,6 +83,32 @@ def archive_agent(agent_id: str, db: Db, bus: Bus) -> Response:
     return Response(status_code=204)
 
 
+@router.post(
+    "/{agent_id}/archive",
+    summary="Archivar un agente (igual que DELETE, pero devuelve el agente archivado)",
+    responses={
+        409: {"model": ErrorResponse, "description": "Tiene tickets o aprobaciones abiertos"}
+    },
+)
+def archive_agent_post(agent_id: str, db: Db, bus: Bus) -> Agent:
+    agents_service.archive_agent(db, bus, agent_id)
+    return agents_service.get_agent_or_404(db, agent_id)
+
+
+@router.post(
+    "/{agent_id}/restore",
+    summary="Restaurar un agente archivado (respeta maxAgents y el nombre único)",
+    responses={
+        409: {
+            "model": ErrorResponse,
+            "description": "Nombre en uso (CONFLICT) o máximo de agentes (LIMIT_EXCEEDED)",
+        }
+    },
+)
+def restore_agent(agent_id: str, db: Db, bus: Bus) -> Agent:
+    return agents_service.restore_agent(db, bus, agent_id)
+
+
 @router.patch(
     "/{agent_id}/status",
     summary="Cambio manual de estado (IDLE, WORKING, REVIEW, BLOCKED o SLEEP_QUOTA)",

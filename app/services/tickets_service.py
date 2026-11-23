@@ -14,6 +14,7 @@ from app.errors import AppError, not_found, validation_error
 from app.events.bus import EventBus
 from app.repositories import agents_repo
 from app.repositories import tickets_repo as repo
+from app.services import settings_service
 from app.services.agents_service import agent_payload
 from app.util import new_id, now_iso
 
@@ -126,6 +127,22 @@ def _apply_agent_effect(db: Database, ticket: Ticket, to: str, now: str) -> Agen
     return agents_repo.get_agent(db, agent.id)
 
 
+def _check_limits(db: Database, ticket: Ticket, to: str) -> None:
+    """Límites de Administración (A04): 409 LIMIT_EXCEEDED."""
+    limits = settings_service.get_limits(db)
+    if to == "IN_PROGRESS" and ticket.assigned_agent_id is not None:
+        active = repo.count_active_for_agent(db, ticket.assigned_agent_id, ticket.id)
+        if active >= limits.max_active_tickets_per_agent:
+            raise settings_service.limit_exceeded(
+                f"El agente ya tiene {active} tickets activos (máximo "
+                f"{limits.max_active_tickets_per_agent}). Termina o devuelve alguno antes"
+            )
+    if to == "DONE" and limits.require_approval_for_done and not repo.has_approved(db, ticket.id):
+        raise settings_service.limit_exceeded(
+            "Este proyecto exige una aprobación APPROVED para pasar a HECHO"
+        )
+
+
 def transition(
     db: Database, bus: EventBus | None, ticket_id: str, body: TicketTransitionBody
 ) -> Ticket:
@@ -140,6 +157,7 @@ def transition(
         )
     if body.to == "DONE" and repo.count_pending_gates(db, ticket_id) > 0:
         raise AppError("GATE_PENDING", "El ticket tiene compuertas de aprobación pendientes")
+    _check_limits(db, ticket, body.to)
     now = now_iso()
     payload = json.dumps({"note": body.note} if body.note else {}, ensure_ascii=False)
     with db.transaction() as tx:

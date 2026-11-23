@@ -93,6 +93,14 @@ def count_active_for_agent(db: Database, agent_id: str, exclude_ticket: str) -> 
     return int(row["n"]) if row else 0
 
 
+def has_approved(db: Database, ticket_id: str) -> bool:
+    row = db.fetch_one(
+        "SELECT COUNT(*) AS n FROM approvals WHERE ticket_id = ? AND status = 'APPROVED'",
+        (ticket_id,),
+    )
+    return bool(row and int(row["n"]) > 0)
+
+
 def count_pending_gates(db: Database, ticket_id: str) -> int:
     row = db.fetch_one(
         "SELECT COUNT(*) AS n FROM approvals WHERE ticket_id = ? AND status = 'PENDING'",

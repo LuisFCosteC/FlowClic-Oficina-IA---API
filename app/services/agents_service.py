@@ -9,6 +9,7 @@ from app.domain.schemas import Agent, AgentAvatar, AgentCreate, AgentStatusBody,
 from app.errors import conflict, not_found, validation_error
 from app.events.bus import EventBus
 from app.repositories import agents_repo as repo
+from app.services import settings_service
 from app.services.workspaces_service import ensure_workspaces_exist
 from app.util import new_id, now_iso
 
@@ -69,6 +70,7 @@ def create_agent(
     """Crea un agente (409 si el nombre ya lo usa uno activo) y emite `agent.created`."""
     agent = build_agent(data, agent_id=agent_id)
     ensure_workspaces_exist(db, agent.permissions)
+    _check_max_agents(db)
     if repo.find_active_by_name(db, agent.name) is not None:
         raise conflict(f"Ya existe un agente activo llamado «{agent.name}»")
     try:
@@ -78,6 +80,34 @@ def create_agent(
     if bus is not None:
         bus.emit("agent.created", agent_payload(agent))
     return agent
+
+
+def _check_max_agents(db: Database) -> None:
+    """409 LIMIT_EXCEEDED si ya se alcanzó `limits.maxAgents` de agentes activos."""
+    max_agents = settings_service.get_limits(db).max_agents
+    if repo.count_active(db) >= max_agents:
+        raise settings_service.limit_exceeded(
+            f"Se alcanzó el máximo de agentes activos ({max_agents}). "
+            "Archiva alguno o sube el límite en Administración → Límites"
+        )
+
+
+def restore_agent(db: Database, bus: EventBus | None, agent_id: str) -> Agent:
+    """Restaura un agente archivado. Respeta `maxAgents` y la unicidad del nombre (409)."""
+    agent = get_agent_or_404(db, agent_id)
+    if agent.archived_at is None:
+        return agent
+    if repo.find_active_by_name(db, agent.name) is not None:
+        raise conflict(f"Ya existe un agente activo llamado «{agent.name}»: renómbralo antes")
+    _check_max_agents(db)
+    try:
+        repo.restore_agent(db, agent_id, now_iso())
+    except IntegrityError:
+        raise conflict(f"Ya existe un agente activo llamado «{agent.name}»") from None
+    restored = get_agent_or_404(db, agent_id)
+    if bus is not None:
+        bus.emit("agent.created", agent_payload(restored))  # reaparece en las vistas
+    return restored
 
 
 def template_to_create(t: AgentTemplate) -> AgentCreate:
