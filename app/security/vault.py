@@ -38,11 +38,16 @@ class Vault:
         self._lock = threading.RLock()
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True)
-        is_new = not path.exists()
+        if not path.exists():
+            # Se crea vacío y se restringe ANTES de guardar ningún secreto (falla en cerrado).
+            path.touch()
+            if not restrict_to_owner(path):
+                path.unlink(missing_ok=True)
+                raise VaultError(
+                    "No se pudieron restringir los permisos de la bóveda; no se creó el archivo."
+                )
         self._conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._conn.execute(_SCHEMA)
-        if is_new:
-            restrict_to_owner(path)
 
     @staticmethod
     def _check(name: str) -> None:

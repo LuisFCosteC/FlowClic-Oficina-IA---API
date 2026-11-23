@@ -26,16 +26,25 @@ def _unquote(value: str) -> str:
 
 
 def atomic_write(path: Path, data: bytes) -> None:
-    """Escritura atómica (temporal + renombrado) dejando el archivo solo para el propietario."""
+    """Escritura atómica (temporal + renombrado) que falla en cerrado.
+
+    El temporal se restringe al propietario ANTES de escribir ningún dato; si no se puede
+    restringir, se borra el temporal y se lanza `PermissionError` sin tocar el archivo destino.
+    El renombrado conserva los permisos del temporal.
+    """
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    tmp_path = Path(tmp)
     try:
-        with os.fdopen(fd, "wb") as fh:
-            fh.write(data)
-        os.replace(tmp, path)
+        os.close(fd)  # vacío todavía: se restringe antes de escribir el contenido
+        if not restrict_to_owner(tmp_path):
+            raise PermissionError(
+                f"No se pudieron restringir los permisos de {path.name}; no se escribió nada."
+            )
+        tmp_path.write_bytes(data)
+        os.replace(tmp_path, path)
     except BaseException:
-        Path(tmp).unlink(missing_ok=True)
+        tmp_path.unlink(missing_ok=True)
         raise
-    restrict_to_owner(path)
 
 
 def import_env_secrets(

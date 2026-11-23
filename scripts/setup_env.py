@@ -50,7 +50,8 @@ def setup(root: Path) -> tuple[str, list[str]]:
         atomic_write(env_path, new_text.encode("utf-8"))
         return "updated", added
     if broader_than_owner(env_path):
-        print("AVISO: el .env es accesible por otros usuarios; ejecuta: chmod 600 .env")
+        hint = "icacls .env /inheritance:r" if sys.platform == "win32" else "chmod 600 .env"
+        print(f"AVISO: el .env es accesible por otros usuarios. Restringelo (por ejemplo: {hint}).")
     return "unchanged", []
 
 
