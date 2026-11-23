@@ -1,14 +1,16 @@
 """Agentes: CRUD (PLAN §5, §19). Pendiente de auth (S09): crear/editar/archivar serán solo ADMIN."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Response
+from pydantic import Field
 
 from app.db.database import Database, get_db
-from app.domain.schemas import Agent, AgentCreate, AgentStatusBody, AgentUpdate
+from app.domain.schemas import Agent, AgentCreate, AgentStatusBody, AgentUpdate, StrictInput
 from app.errors import ErrorResponse
 from app.events.bus import EventBus, get_bus
 from app.services import agents_service
+from app.services.agent_guard import AgentGuard
 
 router = APIRouter(
     prefix="/api/agents",
@@ -81,3 +83,31 @@ def archive_agent(agent_id: str, db: Db, bus: Bus) -> Response:
 )
 def set_agent_status(agent_id: str, body: AgentStatusBody, db: Db, bus: Bus) -> Agent:
     return agents_service.set_agent_status(db, bus, agent_id, body)
+
+
+class FailureReport(StrictInput):
+    """Cuerpo del endpoint de pruebas de la Fase 1 (lo ejercerá el orquestador en la Fase 2)."""
+
+    outcome: Literal["failure", "success"]
+    usd_today: Annotated[float, Field(ge=0, le=1_000_000)] | None = None
+
+
+@router.post(
+    "/{agent_id}/failures",
+    summary="Registrar un fallo o un éxito del agente (pruebas de la Fase 1; solo ADMIN)",
+    description=(
+        "`failure` suma un fallo seguido (al 3.º el agente pasa a BLOCKED); `success` reinicia el "
+        "contador. Si se envía `usdToday`, además se comprueba el tope diario de coste."
+    ),
+    responses={409: {"model": ErrorResponse, "description": "El agente está archivado"}},
+)
+def report_outcome(agent_id: str, body: FailureReport, db: Db, bus: Bus) -> Agent:
+    guard = AgentGuard(db, bus)
+    agent = (
+        guard.record_failure(agent_id)
+        if body.outcome == "failure"
+        else guard.record_success(agent_id)
+    )
+    if body.usd_today is not None:
+        agent = guard.check_budget(agent_id, body.usd_today)
+    return agent
