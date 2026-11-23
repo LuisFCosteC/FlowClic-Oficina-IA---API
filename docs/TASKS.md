@@ -710,6 +710,16 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Pendiente revisión Dev Senior.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 474ms). Commit `b47d94c` en `dev` del FRONT.
 
+- **WS-ID (Dev Junior, 2026-11-23, EN QA)** — Validación regex, auto-slug y mensaje de error del servidor en ID de espacio de trabajo:
+  - Validado el identificador del espacio de trabajo antes de enviarlo con la expresión regular `^[a-z][a-z0-9_-]{0,31}$`.
+  - Si no cumple la validación, muestra bajo el campo de texto: *"Solo minúsculas, números, - y _ (ej. pagina-abogada)"*.
+  - Al escribir en el campo "Nombre descriptivo", propone el ID automáticamente: en minúsculas, sin tildes (usando normalización NFD), y con los espacios convertidos en guiones `-`.
+  - Si el usuario edita directamente el campo ID, la auto-generación se desacopla para respetar la personalización manual.
+  - Al recibir una respuesta de error 400 del servidor al guardar (`api.upsertWorkspace`), el mensaje de error se muestra directamente bajo el campo ID en lugar de en un banner genérico.
+  - Probar: Ir a Administración → pestaña "Espacios de trabajo" y pulsar "Añadir espacio"; escribir en Nombre descriptivo "Página de la Abogada" y verificar que el ID se propone como "pagina-de-la-abogada"; escribir caracteres inválidos en el ID (como mayúsculas o símbolos no permitidos) y verificar el mensaje de ayuda en rojo *"Solo minúsculas, números, - y _ (ej. pagina-abogada)"*; intentar guardar un ID inválido y comprobar que la validación detiene el envío; simular un 400 del backend y comprobar que el error se despliega bajo el campo ID.
+  - Pendiente revisión Dev Senior.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 433ms). Commit `2039d82` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
