@@ -2,6 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import type { Express } from 'express';
 import type { Client } from '@libsql/client';
+import { errorHandler, notFoundHandler } from './middleware/errors.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 export interface AppDeps {
@@ -24,6 +25,9 @@ export function createApp(deps: AppDeps): Express {
       next(err);
     }
   });
+
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   return app;
 }
