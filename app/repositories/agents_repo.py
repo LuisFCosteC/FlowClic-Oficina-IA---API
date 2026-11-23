@@ -169,3 +169,20 @@ def archive_agent(db: Database, agent_id: str, now: str) -> None:
 
 def restore_agent(db: Database, agent_id: str, now: str) -> None:
     db.execute("UPDATE agents SET archived_at = NULL, updated_at = ? WHERE id = ?", (now, agent_id))
+
+
+def count_open_tickets(db: Database, agent_id: str) -> int:
+    """Tickets asignados al agente que no están en DONE."""
+    row = db.fetch_one(
+        "SELECT COUNT(*) AS n FROM tickets WHERE assigned_agent_id = ? AND status != 'DONE'",
+        (agent_id,),
+    )
+    return int(row["n"]) if row else 0
+
+
+def count_pending_approvals(db: Database, agent_id: str) -> int:
+    row = db.fetch_one(
+        "SELECT COUNT(*) AS n FROM approvals WHERE agent_id = ? AND status = 'PENDING'",
+        (agent_id,),
+    )
+    return int(row["n"]) if row else 0

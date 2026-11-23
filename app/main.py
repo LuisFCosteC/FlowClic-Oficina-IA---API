@@ -12,7 +12,7 @@ from app.config import Settings, get_settings
 from app.db.database import Database, clear_db, set_db, try_get_db
 from app.errors import register_error_handlers
 from app.middleware import SetupModeMiddleware
-from app.routers import agent_templates, health, setup
+from app.routers import agent_templates, agents, health, setup
 from app.security.setup_gate import SetupGate
 from app.security.vault import Vault
 from app.services.setup_service import has_admin
@@ -94,6 +94,7 @@ def create_app(
     app.include_router(health.router)
     app.include_router(setup.router)
     app.include_router(agent_templates.router)
+    app.include_router(agents.router)
     return app
 
 
