@@ -151,5 +151,5 @@ def test_exito_sin_fallos_no_emite_eventos(
 
 
 def test_documentado_en_openapi(client: TestClient) -> None:
-    paths = client.get("/openapi.json").json()["paths"]
+    paths = client.get("/api/openapi.json").json()["paths"]
     assert "post" in paths["/api/agents/{agent_id}/failures"]

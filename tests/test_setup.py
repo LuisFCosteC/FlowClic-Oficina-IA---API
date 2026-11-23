@@ -86,7 +86,7 @@ def test_las_demas_rutas_devuelven_503_setup_required_pero_health_y_docs_viven(e
     health = env.local.get("/api/health")
     assert health.status_code == 200
     assert health.json() == {"ok": True}
-    assert env.local.get("/docs").status_code == 200
+    assert env.local.get("/api/docs").status_code == 200
 
 
 def test_sin_codigo_o_con_codigo_malo_403(env: Env) -> None:

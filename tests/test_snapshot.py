@@ -61,6 +61,6 @@ def test_el_snapshot_no_expone_secretos(seeded_client: TestClient, migrated_db: 
 
 
 def test_openapi_lo_documenta_con_su_modelo(client: TestClient) -> None:
-    spec = client.get("/openapi.json").json()
+    spec = client.get("/api/openapi.json").json()
     assert "get" in spec["paths"]["/api/snapshot"]
     assert "Snapshot" in spec["components"]["schemas"]

@@ -12,6 +12,7 @@ from pydantic import Field
 from app.db.database import swap_db, try_get_db
 from app.domain.schemas import CamelModel, StrictInput
 from app.errors import AppError, ErrorResponse, conflict, not_found
+from app.security.localhost import is_local_request
 from app.security.setup_gate import SetupGate
 from app.security.vault import Vault
 from app.services import setup_service
@@ -21,8 +22,6 @@ router = APIRouter(
     tags=["Configuración inicial"],
     responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
 )
-
-LOCAL_HOSTS = {"127.0.0.1", "::1"}
 
 
 class SetupStatus(CamelModel):
@@ -63,32 +62,12 @@ def _status() -> SetupStatus:
     )
 
 
-LOCAL_HOST_HEADERS = {"localhost", "127.0.0.1", "[::1]", "::1"}
-PROXY_HEADERS = ("forwarded", "x-real-ip")
-
-
 def _require_local(request: Request) -> None:
-    """Solo accesos directos desde esta máquina (PLAN §16.3).
-
-    No basta con `request.client.host`: detrás de un proxy inverso todas las peticiones parecen
-    locales. Por eso se rechaza (403) cualquier petición con cabeceras de proxy o con un `Host`
-    que no sea localhost/127.0.0.1. Además, uvicorn se arranca con `--no-proxy-headers`.
-    """
-    denied = AppError(
-        "FORBIDDEN", "El asistente de configuración solo está disponible en localhost"
-    )
-    host = request.client.host if request.client else None
-    if host not in LOCAL_HOSTS:
-        raise denied
-    headers = request.headers
-    if any(h in headers for h in PROXY_HEADERS) or any(
-        k.startswith("x-forwarded-") for k in headers
-    ):
-        raise denied
-    authority = headers.get("host", "")
-    hostname = authority.rsplit(":", 1)[0] if not authority.endswith("]") else authority
-    if hostname.lower() not in LOCAL_HOST_HEADERS:
-        raise denied
+    """Solo accesos directos desde esta máquina (PLAN §16.3). Ver app/security/localhost.py."""
+    if not is_local_request(request):
+        raise AppError(
+            "FORBIDDEN", "El asistente de configuración solo está disponible en localhost"
+        )
 
 
 def _ensure_open(request: Request) -> SetupStatus:

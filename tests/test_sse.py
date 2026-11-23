@@ -218,5 +218,5 @@ def test_en_modo_setup_events_da_503(test_settings: Settings, tmp_path: Any) -> 
 
 
 def test_openapi_documenta_events(client: TestClient) -> None:
-    op = client.get("/openapi.json").json()["paths"]["/api/events"]["get"]
+    op = client.get("/api/openapi.json").json()["paths"]["/api/events"]["get"]
     assert "text/event-stream" in op["responses"]["200"]["content"]

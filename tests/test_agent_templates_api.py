@@ -47,7 +47,7 @@ def test_cargar_equipo_base_dos_veces_deja_4_agentes(
 
 
 def test_el_endpoint_aparece_en_openapi(client: TestClient) -> None:
-    paths = client.get("/openapi.json").json()["paths"]
+    paths = client.get("/api/openapi.json").json()["paths"]
     assert "/api/agent-templates" in paths
     assert "/api/admin/agents/load-base-team" in paths
 

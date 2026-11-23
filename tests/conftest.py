@@ -65,7 +65,7 @@ def client(migrated_db: Database, test_settings: Settings) -> Iterator[TestClien
     from app.main import create_app
 
     app = create_app(test_settings, migrated_db)
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://localhost", client=("127.0.0.1", 50000)) as c:
         yield c
 
 

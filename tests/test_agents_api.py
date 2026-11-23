@@ -238,7 +238,7 @@ def test_los_errores_no_emiten_eventos(client: TestClient, events: list[DomainEv
 
 
 def test_openapi_documenta_los_endpoints_de_agentes(client: TestClient) -> None:
-    paths = client.get("/openapi.json").json()["paths"]
+    paths = client.get("/api/openapi.json").json()["paths"]
     assert set(paths["/api/agents"]) == {"get", "post"}
     assert set(paths["/api/agents/{agent_id}"]) == {"get", "patch", "delete"}
     assert "409" in paths["/api/agents"]["post"]["responses"]

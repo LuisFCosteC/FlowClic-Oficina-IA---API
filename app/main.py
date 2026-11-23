@@ -14,7 +14,16 @@ from app.errors import register_error_handlers
 from app.events.bus import EventBus, get_bus
 from app.middleware import SecurityMiddleware, SetupModeMiddleware
 from app.realtime.sse import SSEHub
-from app.routers import agent_templates, agents, events, health, messages, setup, snapshot
+from app.routers import (
+    agent_templates,
+    agents,
+    docs,
+    events,
+    health,
+    messages,
+    setup,
+    snapshot,
+)
 from app.security.setup_gate import SetupGate
 from app.security.vault import Vault
 from app.services.setup_service import has_admin
@@ -80,9 +89,9 @@ def create_app(
         title="FlowClic Oficina IA - API",
         version=__version__,
         description="API de la Fase 1: agentes, tickets, aprobaciones y tiempo real.",
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url=None,  # la documentación vive en /api/docs (routers/docs.py, P03)
+        redoc_url=None,
+        openapi_url=None,
         lifespan=lifespan,
     )
     app.state.settings = cfg
@@ -102,6 +111,7 @@ def create_app(
     )
     app.add_middleware(SecurityMiddleware)  # el más externo: sus cabeceras salen en TODA respuesta
     app.include_router(health.router)
+    app.include_router(docs.router)
     app.include_router(setup.router)
     app.include_router(agent_templates.router)
     app.include_router(agents.router)

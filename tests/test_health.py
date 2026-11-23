@@ -16,6 +16,6 @@ def test_cors_origen_permitido_recibe_acao_y_el_ajeno_no(client: TestClient) -> 
 
 
 def test_swagger_sigue_disponible(client: TestClient) -> None:
-    assert client.get("/docs").status_code == 200
-    paths = client.get("/openapi.json").json()["paths"]
+    assert client.get("/api/docs").status_code == 200
+    paths = client.get("/api/openapi.json").json()["paths"]
     assert "/api/health" in paths

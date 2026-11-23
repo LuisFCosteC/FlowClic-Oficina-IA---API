@@ -4,7 +4,7 @@ API de la Fase 1 (sin IA): agentes, tickets, aprobaciones, memoria, tiempo real 
 Diseño completo en `docs/PLAN.md`; tareas y estado en `docs/TASKS.md`.
 
 > **Estado:** la API se está construyendo por tareas. Este README solo describe comandos que **ya existen**;
-> lo futuro va marcado como *(pendiente: tarea X)*. Hoy `uvicorn` sirve únicamente la documentación Swagger (`/docs`);
+> lo futuro va marcado como *(pendiente: tarea X)*. Hoy `uvicorn` sirve únicamente la documentación Swagger (`/api/docs`);
 > los endpoints llegan con T20, T30… y el asistente de primer arranque con C04.
 
 ## Requisitos
@@ -19,7 +19,8 @@ pip install -r requirements.txt -r requirements-dev.txt
 python scripts/setup_env.py                              # crea .env con APP_MASTER_KEY y SESSION_SECRET aleatorios
 uvicorn app.main:app --reload --host 127.0.0.1 --port 4000 --no-proxy-headers --no-server-header
 ```
-Swagger: <http://localhost:4000/docs> · ReDoc: <http://localhost:4000/redoc> · Esquema: <http://localhost:4000/openapi.json>
+Swagger: <http://localhost:4000/api/docs> · ReDoc: <http://localhost:4000/api/redoc> · Esquema: <http://localhost:4000/api/openapi.json>
+(Solo desde esta máquina y con `DOCS_ENABLED=true`; `/docs` en la raíz ya no existe. Con la autenticación (S09) exigirá sesión ADMIN u OPERATOR.)
 
 ### La base de datos
 La URL y el token de la BD **no van en el `.env`**: se guardan cifrados en `data/vault.db` (clave: `APP_MASTER_KEY`).

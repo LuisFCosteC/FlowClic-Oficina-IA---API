@@ -102,5 +102,5 @@ def test_inexistente_404_y_archivado_409(client: TestClient, agent: dict[str, An
 
 
 def test_openapi_documenta_el_endpoint(client: TestClient) -> None:
-    paths = client.get("/openapi.json").json()["paths"]
+    paths = client.get("/api/openapi.json").json()["paths"]
     assert "patch" in paths["/api/agents/{agent_id}/status"]

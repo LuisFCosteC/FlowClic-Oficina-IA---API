@@ -292,6 +292,6 @@ def test_esquema_006_valida_scope_y_agente(migrated_db: Database) -> None:
 
 
 def test_openapi_documenta_mensajes_y_resumen(client: TestClient) -> None:
-    paths = client.get("/openapi.json").json()["paths"]
+    paths = client.get("/api/openapi.json").json()["paths"]
     assert set(paths["/api/messages"]) == {"get", "post"}
     assert "get" in paths["/api/agents/{agent_id}/status-summary"]

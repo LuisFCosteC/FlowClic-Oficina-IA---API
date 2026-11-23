@@ -9,7 +9,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.db.database import try_get_db
 from app.errors import error_response
 
-_ALWAYS_OPEN = ("/api/health", "/api/setup")
+_ALWAYS_OPEN = ("/api/health", "/api/setup", "/api/docs", "/api/redoc", "/api/openapi.json")
 
 
 class SetupModeMiddleware:
@@ -41,7 +41,7 @@ _DOCS_CSP = (
     "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net"
 )
-_DOCS_PREFIXES = ("/docs", "/redoc", "/api/docs", "/api/redoc")
+_DOCS_PREFIXES = ("/api/docs", "/api/redoc")
 
 
 log = logging.getLogger("flowclic")

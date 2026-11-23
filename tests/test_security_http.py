@@ -60,9 +60,11 @@ def test_no_se_revela_el_software_ni_su_version(client: TestClient) -> None:
 def test_la_documentacion_tiene_una_csp_que_permite_swagger_pero_la_api_no(
     client: TestClient,
 ) -> None:
-    docs = client.get("/docs").headers["content-security-policy"]
+    docs = client.get("/api/docs").headers["content-security-policy"]
     assert "cdn.jsdelivr.net" in docs and "frame-ancestors 'none'" in docs
-    assert "cdn.jsdelivr.net" not in client.get("/openapi.json").headers["content-security-policy"]
+    assert (
+        "cdn.jsdelivr.net" not in client.get("/api/openapi.json").headers["content-security-policy"]
+    )
     assert "cdn.jsdelivr.net" not in client.get("/api/health").headers["content-security-policy"]
 
 

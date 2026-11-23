@@ -1,9 +1,7 @@
 from fastapi.testclient import TestClient
 
-from app.main import create_app
 
-
-def test_swagger_docs_disponibles() -> None:
-    client = TestClient(create_app())
-    assert client.get("/docs").status_code == 200
-    assert client.get("/openapi.json").json()["info"]["title"].startswith("FlowClic")
+def test_swagger_disponible_en_api_docs(client: TestClient) -> None:
+    assert client.get("/api/docs").status_code == 200
+    assert client.get("/api/openapi.json").json()["info"]["title"].startswith("FlowClic")
+    assert client.get("/docs").status_code == 404  # la raíz ya no sirve la documentación
