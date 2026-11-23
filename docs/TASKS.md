@@ -523,3 +523,18 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - **Slots de agentes (`LOUNGE_SLOTS`)**:
     - Actualizados a 15 puestos (los 9 pufs de los TVs + los 6 puestos en las mesas de comedor) para que los agentes en descanso puedan jugar o desayunar con holgura.
   - Lint y build pasan al 100% en verde.
+
+- **CAL01 (Subsanación completa fecha dinámica y timeline)** — (repo FRONT, commit ce0c6de):
+  - Creado `src/utils/date.ts` con `todayLocal()` utilizando estrictamente `getFullYear()`, `getMonth()`, `getDate()` locales. Sin uso de `toISOString` (previene desviación horaria nocturna en UTC).
+  - Eliminados todos los '2026-11-22' fijos de `RoadmapCalendarView.tsx` (incluyendo estado inicial, celda resaltada, botón 'Hoy' y tooltip del marcador de Gantt).
+  - Eliminadas las constantes fijas `TIMELINE_START`, `TIMELINE_END`, `TIMELINE_SPAN`. El rango de la escala de tiempo ahora se calcula dinámicamente con `useMemo` a partir de `todayLocal()` y las fechas de los proyectos (`startDate`, `endDate`, `reviewDate`), o el mes actual completo si no hay proyectos.
+  - El botón 'Hoy' y la línea de hoy usan `todayLocal()`, que se actualiza periódicamente si la app permanece abierta durante el cambio de día.
+  - Probar: Abrir la pestaña Calendario de Proyectos (`npm run dev`), presionar el botón 'Hoy'; comprobar que se resalta el día local actual (ej. 23 de noviembre a las 23:30 marca 23 de noviembre); verificar que el timeline de proyectos muestra fechas dinámicas coherentes en su encabezado. Lint y build pasan al 100% en verde.
+
+- **Ronda 8 — QA Junior (2026-11-23):**
+  - **CAL01:** PASA a `EN REVISIÓN`. Fecha local dinámica con `todayLocal()` y timeline responsivo verificados.
+  - **QM0-bis:** PASA a `EN REVISIÓN`. Flujo completo en Turso con los 5 agentes reales intactos (creación de workspace, credencial en bóveda, ticket con spec dividida, transiciones PENDING->IN_PROGRESS->IN_QA->IN_REVIEW->DONE con actualización de estados del agente, y registro de eventos). Limpieza individual 100% limpia sin wipe.
+  - **G07 / AG-EDIT:** `DEVUELTA`. Archivos de modal y plantillas permanecen sin commitear en HEAD de `origin/dev`.
+  - **Seguridad:** 1 mensaje de prueba con prefijo `QA R8` enviado a Sheldon y verificado contra fugas en logs, respuestas y auditoría (0 claves expuestas). Comprobado aislamiento de rutas locales en el system prompt. Permisos de transición 403 pendientes de S09 (retornan 409 por grafo actual).
+  - **A00–A05, MOD01, FLOW01:** No aplican o permanecen en PENDIENTE (no estaban EN QA con visto bueno de Dev Senior).
+  - Suite global: pytest (668 passed, 1 skipped), ruff (clean), mypy (clean, 64 files), npm run lint (clean), npm run build (clean).

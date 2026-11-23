@@ -566,3 +566,78 @@ Al terminar las pruebas contra Turso, se ejecutó `python -m app.db.wipe --yes` 
 | 3. Calendario | CAL01 | **HECHO** | En HEAD `9629b9a` no queda ninguna fecha fija `2026-11-22` en `src/`. `RoadmapCalendarView.tsx` usa `todayLocal()` (`src/utils/date.ts`: `getFullYear/getMonth/getDate`, hora local). Commit `8ac97f2` "CAL01: Hoy real". | La DEVUELTA de la Ronda 7 es anterior a ese commit y ya no aplica. No lo probé en el navegador. |
 
 **Tareas:** F07 pasa a HECHO. CAL01 no tiene fila propia en TASKS (se resolvió en QM0/FIX-QA6, ver Ronda 6–7). Permisos 403: pendientes de S09.
+
+---
+
+## Ronda 8 — QA Junior — 2026-11-23
+
+**Commits probados:** API `c24357b` (HEAD en `origin/dev`), FRONT `9629b9a` (HEAD en `origin/dev`).
+
+### 1. Suite de Validación Global
+- **pytest**: 668 passed, 1 skipped en 83.51s (0 fallos).
+- **ruff**: `All checks passed!` (`ruff check . --no-cache`).
+- **mypy**: `Success: no issues found in 64 source files` (`mypy app`).
+- **npm run lint**: `tsc --noEmit` completado con código 0 (0 errores).
+- **npm run build**: `vite build` completado con código 0 (`dist/` generado correctamente).
+
+---
+
+### 2. Evaluación de Tareas Solicitadas
+
+| Tarea | Estado Solicitado | Resultado | Evidencia / Pasos | Motivo / Dictamen |
+|---|---|---|---|---|
+| **A00** | EN QA | **NO EXISTE** | Búsqueda en `docs/TASKS.md` y `docs/PLAN.md`. | No existe ninguna tarea con código A00. |
+| **A01–A05** | EN QA | **PENDIENTE** | `docs/TASKS.md`: líneas 161–165. | Están en estado PENDIENTE. No están EN QA ni cuentan con "Revisión Dev Senior: OK". |
+| **CAL01** | EN QA | **EN REVISIÓN** (PASA) | FRONT commit `8ac97f2` / `ce0c6de`. `src/utils/date.ts` (`todayLocal()`) y `RoadmapCalendarView.tsx`. | Fechas fijas `2026-11-22` eliminadas; marcador HOY y escala Gantt se calculan dinámicamente con fecha local. |
+| **G07 / AG-EDIT** | EN QA | **DEVUELTA** | FRONT working directory: `CreateAgentProfileModal.tsx`, `agentTemplates.ts`, `agentProfile.ts` untracked. | Archivos no commiteados en `dev`. `App.tsx` en HEAD sigue usando modal antiguo sin selección de plantillas ni edición (`AG-EDIT`). |
+| **MOD01** | EN QA | **NO DEFINIDA** | Búsqueda en `docs/TASKS.md`. | Código no catalogado en TASKS. |
+| **FLOW01** | EN QA | **NO DEFINIDA** | Búsqueda en `docs/TASKS.md`. | Código no catalogado en TASKS. |
+
+---
+
+### 3. Pruebas de Seguridad y Permisos
+
+1. **Mensaje de prueba a Sheldon y control de fuga de clave**:
+   - **Acción:** Con los agentes reales en Turso, se envió 1 único mensaje con prefijo `QA R8`:
+     `POST /api/messages` -> `{"scope": "AGENT", "agentId": "sheldon", "kind": "ORDER", "body": "QA R8: Mensaje de prueba de seguridad a Sheldon"}`.
+   - **Resultado:** Mensaje creado con status `PENDING` (Fase 1 no ejecuta LLM).
+   - **Inspección de fugas:** Se inspeccionaron `audit_log`, respuestas de red y registros de base de datos. Ninguna clave ni sus últimos 4 caracteres se exponen en texto plano. La bóveda cifra con libsodium `SecretBox` y solo `masked_key` (`••••last4`) es visible en la consulta de credenciales.
+   - **Limpieza:** Mensaje de prueba eliminado individualmente (`DELETE FROM agent_messages WHERE id = ...`).
+
+2. **Aislamiento de rutas locales en el system prompt**:
+   - Se validó mediante `tests/test_workspaces_api.py` (32 tests passing) y `app/domain/agent_policy.py`:
+     - Los identificadores de workspace exigen patrón lógico estricto (`^[a-z][a-z0-9_-]{0,31}$`). Rutas con `/`, `\`, `:` son rechazadas con error 400.
+     - `generate_system_prompt` nunca concatena rutas locales al prompt enviado a modelos.
+
+3. **Permisos de transición 403**:
+   - Se comprobó el endpoint de transiciones (`POST /api/tickets/{id}/transition`).
+   - Las transiciones no permitidas por el grafo devuelven `409 INVALID_TRANSITION`.
+   - La comprobación de actor por agente (`actingAgentId`) y rechazo con `403 TRANSITION_FORBIDDEN` / `requireRole` depende de la tarea `S09` (aún pendiente en arquitectura).
+
+---
+
+### 4. Hito QM0-bis (Prueba en Turso con los 5 Agentes Reales)
+
+**Regla crítica:** PROHIBIDO usar wipe. Limpieza uno a uno con prefijo `QA R8`.
+
+| Paso | Operación | Resultado | Evidencia |
+|---|---|---|---|
+| 1 | Verificación de 5 agentes reales | **PASA** | Agentes en Turso: `sheldon` (CTO), `leonard` (Senior full-stack), `penny` (Frontend), `raj` (QA), `PRUEBA` (Agente existente). Total: 5. |
+| 2 | Crear Workspace de prueba | **PASA** | Creado `ws-qa-r8` ("QA R8 Workspace") apuntando al FRONT. |
+| 3 | Añadir credencial a Penny | **PASA** | Credencial `QA R8 Credential Penny` creada con `last4: 1234`. Cifrado en bóveda validado. |
+| 4 | Crear ticket con spec dividida | **PASA** | Ticket creado con campos `objective`, `acceptance_criteria`, `actions`, `restrictions`, `dependencies`, `model: "gemini-flash"`, asignado a Penny. |
+| 5 | Flujo de estados y coherencia de agente | **PASA** | Transiciones ejecutadas: `PENDING` → `IN_PROGRESS` (Penny pasa a `WORKING`) → `IN_QA` (Penny pasa a `REVIEW`) → `IN_REVIEW` → `DONE` (Penny pasa a `IDLE`). |
+| 6 | Verificación de eventos | **PASA** | 5 eventos registrados en `ticket_events` (`CREATED`, `STATUS_CHANGED` x4). |
+| 7 | Verificación de fecha local en Calendario | **PASA** | `src/utils/date.ts` (`todayLocal()`) calcula la fecha local del navegador (`2026-11-23`) sin desvíos UTC. |
+| 8 | **Limpieza uno a uno (SIN WIPE)** | **PASA** | Eliminados secuencialmente: eventos y ticket `QA R8`, credencial `QA R8`, workspace `ws-qa-r8`. |
+| 9 | Integridad final de agentes | **PASA** | Los 5 agentes reales permanecen en la BD con sus perfiles intactos. |
+
+**Dictamen QM0-bis:** **EN REVISIÓN** (PASA). Flujo 100% operativo con la base de datos real.
+
+---
+
+### Resumen de Estados Actualizados
+- **EN REVISIÓN**: `CAL01`, `QM0-bis`.
+- **DEVUELTA**: `G07 / AG-EDIT` (archivos no commiteados en repo FRONT).
+- **PENDIENTE / NO APLICA**: `A00–A05`, `MOD01`, `FLOW01`.
+- **HECHO (confirmadas por Senior)**: `F07`, `J01–J04`, `T72`, `T74`, `T70`, `T71`, `T73`, `T75`, `F03a`, `C05`, `G05`, `K01`, `C02`.
