@@ -690,6 +690,26 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Pendiente revisión Dev Senior.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 562ms). Commit `0e8ebd7` en `dev` del FRONT.
 
+- **CONN01 (Dev Junior, 2026-11-23, EN QA)** — Unificación de pestaña Conexiones con claves API y Base de Datos:
+  - Unificadas las pestañas "Conexiones API" y "Conexión BD" en una sola pestaña **"Conexiones"** (`connections`).
+  - Nuevo orden estricto de las 8 pestañas de Administración: Agentes, Conexiones, Espacios de trabajo, Proyecto, Reglas, Límites, Usuarios, Auditoría.
+  - Sección superior **"Claves API de los agentes"**:
+    - Formulario "Añadir clave": selector de agente existente, selector de proveedor (Google/Gemini, Anthropic/Claude, OpenAI, Otro), etiqueta descriptiva y clave (`type="password"`, `autoComplete="off"`).
+    - Consume `POST /api/admin/agents/{id}/credentials`.
+    - La clave se vacía inmediatamente al guardar y al desmontar el componente; nunca se persiste en localStorage, sessionStorage ni en el store.
+    - Si no hay agentes en el sistema, muestra el mensaje de aviso: *"Crea primero un agente en la pestaña Agentes"*.
+    - Tabla completa de claves activas: agente (con indicador visual), proveedor, etiqueta, ••••last4, fecha de creación y fecha de rotación.
+    - Modales en la UI para **Rotar** (`POST /api/admin/agents/{id}/credentials/{id}/rotate`) con nueva clave protegida y para **Revocar** (`DELETE /api/admin/agents/{id}/credentials/{id}`).
+    - Filtros dinámicos por agente y por proveedor.
+    - Sección inferior de catálogo con los modelos disponibles (`GET /api/models`), indicando badge *"conectado"* o *"sin conexión"*.
+  - Sección inferior **"Base de datos"**:
+    - Integrado panel completo de base de datos (`DbConnectionPanel`).
+    - Al fallar `PUT /api/admin/db` con 403, despliega la explicación exacta: *"El cambio de BD está desactivado por seguridad. Para activarlo, pon ADMIN_ALLOW_DB_CHANGE=true en el .env de la API y reinicia."*.
+    - Campo URL con `autoComplete="off"` y token con `autoComplete="new-password"`.
+  - Probar: Ir a Administración → pestaña "Conexiones"; comprobar que aparecen las 2 secciones (Claves API arriba, Base de datos abajo); seleccionar un agente y añadir una clave API; verificar que aparece en la tabla; filtrar por proveedor o agente; pulsar "Rotar" y rotar la clave; pulsar "Revocar" y revocarla con el modal de confirmación; comprobar el catálogo de modelos abajo; en la sección de Base de datos, probar conexión y comprobar advertencia 403 al intentar guardar si `ADMIN_ALLOW_DB_CHANGE` es false.
+  - Pendiente revisión Dev Senior.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 474ms). Commit `b47d94c` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
