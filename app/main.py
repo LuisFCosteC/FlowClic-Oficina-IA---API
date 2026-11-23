@@ -22,6 +22,7 @@ from app.routers import (
     events,
     health,
     messages,
+    models,
     setup,
     snapshot,
     tickets,
@@ -121,6 +122,7 @@ def create_app(
     app.include_router(admin_credentials.router)
     app.include_router(snapshot.router)
     app.include_router(events.router)
+    app.include_router(models.router)
     app.include_router(messages.router)
     return app
 

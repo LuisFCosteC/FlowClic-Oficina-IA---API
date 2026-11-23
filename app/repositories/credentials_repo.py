@@ -120,3 +120,9 @@ def get_sealed(db: Database, cred_id: str) -> Sealed | None:
     if row is None:
         return None
     return Sealed(bytes(row["ciphertext"]), bytes(row["nonce"]), int(row["key_version"]))
+
+
+def active_providers(db: Database) -> set[str]:
+    """Proveedores con al menos una conexión activa en cualquier agente."""
+    rows = db.fetch_all("SELECT DISTINCT provider FROM agent_credentials WHERE revoked_at IS NULL")
+    return {str(r["provider"]) for r in rows}
