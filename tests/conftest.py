@@ -1,10 +1,14 @@
 from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.db.database import Database, connect_database
+
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
 
 
 @pytest.fixture(autouse=True)
@@ -37,3 +41,23 @@ def migrated_db(raw_db: Database) -> Database:
 
     migrate(raw_db)
     return raw_db
+
+
+@pytest.fixture
+def test_settings() -> Settings:
+    """Settings de pruebas: sin leer .env ni claves reales."""
+    from app.config import Settings
+
+    return Settings(_env_file=None, node_env="test")  # type: ignore[call-arg]
+
+
+@pytest.fixture
+def client(migrated_db: Database, test_settings: Settings) -> Iterator["TestClient"]:
+    """Cliente HTTP contra la app, con una BD temporal migrada y VACÍA."""
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    app = create_app(test_settings, migrated_db)
+    with TestClient(app) as c:
+        yield c

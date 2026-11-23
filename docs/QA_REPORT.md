@@ -38,4 +38,38 @@ Para pasar QP1, una de estas dos opciones (decisión del Arquitecto):
 - Marcar en el README esos pasos como "pendiente (T13 / S02 / S05)" y dejar la puesta en marcha solo con migrate + uvicorn; o
 - Implementar esos comandos antes de QP1.
 
-Pendiente de QA (no se ha probado en esta ronda): P00 (revisar la nota de TASKS con versiones y resultados de rollback).
+---
+
+## Ronda 2 — 2026-11-22 (dev en `7bc4ae6`; FRONT en `8e21fd0`)
+
+Entorno: copias limpias de `dev` en carpetas temporales. API con BD temporal `file:` y bóveda temporal con claves generadas para la prueba (no se leyó el `.env` real). FRONT en el puerto 3100 (el 3000 lo ocupa otro proceso). Ningún valor real ni secreto aparece en este informe.
+
+| ID | Fecha | Qué probaste | Resultado | Error exacto y pasos para reproducir |
+|---|---|---|---|---|
+| P00 | 2026-11-22 | Revisión de la nota de P00 en TASKS: versión de Python (3.13.17), versión de `libsql` (0.1.11), resultado de cada operación (create, insert parametrizado, lectura, commit, rollback, reintento de BEGIN) y rollback. | **PASA** | — La nota cubre todos los puntos del criterio. Propuesta de estado: HECHO. |
+| T10 | 2026-11-22 | Script propio: `connect_database(url, "")` con `file:` ejecuta `SELECT 1` y `libsql.connect` se llama **sin** `auth_token` (kwargs vacíos). `pytest` del repo pasa. | **PASA** | — Propuesta: HECHO. |
+| T11 | 2026-11-22 | Script propio: 1ª `migrate` aplica `001_init.sql` y `002_security.sql`; 2ª aplica `[]`; migración `002_broken.sql` (SQL roto con tabla inexistente) → `MigrationError: Migración 002_broken.sql falló: no such table: tabla_inexistente`, no queda registrada (solo versión 1) ni existe `partial_t`. | **PASA** | — Propuesta: HECHO. |
+| T12 | 2026-11-22 | Script propio sobre BD migrada: `status='FOO'` falla por CHECK en agents, tickets y approvals; 2ª aprobación PENDING del mismo ticket → `IntegrityError: UNIQUE constraint failed: approvals.ticket_id`. | **PASA** | — Propuesta: HECHO. |
+| C01 | 2026-11-22 | Script propio: cifrar/descifrar OK; AAD distinta → `CryptoError`; ciphertext con un byte alterado → `CryptoError`; mismo texto dos veces → ciphertext y nonce distintos. `pytest tests/test_crypto.py` pasa en la copia limpia. | **PASA** | — Propuesta: HECHO. |
+| C02 | 2026-11-22 | Script propio: `vault.db` temporal con URL y token **ficticios**: ni los bytes del archivo ni el volcado `sqlite3 iterdump` contienen la URL ni el token; `open_configured_database` conecta con los datos de la bóveda y ejecuta `SELECT 1`. | **PARCIAL** | Parte de la bóveda: PASA. **No verificado**: la conexión real a Turso (`libsql://`) porque no hay BD en la nube de prueba. El criterio la pide. Propuesta: mantener EN QA hasta tener una BD Turso de prueba (o decidir si se acepta como no verificado). |
+| C03 | 2026-11-22 | Antes de la devolución del Arquitecto (commit 6114104) hice una comprobación funcional con `.env` temporal: `TURSO_*` eliminadas, resto del `.env` idéntico, sin `.env.bak`, log sin URL ni token. | **NO VÁLIDA** | Queda **superada** por la devolución de seguridad. No se prueba hasta que vuelva a EN QA. Cuando vuelva: `icacls` sobre `.env` y `data/vault.db` debe mostrar solo usuario, SYSTEM y Administradores. |
+| V00 | 2026-11-22 | FRONT en el puerto 3100: al abrir la app se ve el Kanban; el Sidebar muestra "To-Do & Pipeline de Tareas", "Calendario de Proyectos", "Cerebro FlowClic" (3), "Oficina IA 3D" en ese orden; `npm run lint` (tsc) y `npm run build` pasan. | **PASA** | — Propuesta: HECHO. |
+| K01 | 2026-11-22 | FRONT: `npm run lint` y `npm run build` pasan. Arrastre: (a) gesto real con el ratón por CDP → **no disparó** el arrastre HTML5; (b) eventos `dragstart`/`dragenter`/`dragover`/`drop`/`dragend` simulados con `DataTransfer` → la tarjeta "Optimización de índices" pasó de Backlog a "Revisión de Sheldon" (contadores 2→1 y 1→2). Teclado: foco en la flecha "Avanzar a siguiente etapa" de "Guía OpenAPI" + Enter → pasó de Backlog a En Desarrollo. Consola sin errores. | **PARCIAL** | No probado: (1) arrastre con el ratón real entre las 5 columnas (el gesto CDP no activa el DnD nativo; hay que hacerlo a mano en el navegador); (2) movimiento con Alt+←/→ (la nota de DEV lo menciona); (3) el resaltado de la columna destino y la tarjeta fantasma (solo se vio la tarjeta en su nueva columna). Propuesta: EN QA hasta que el CEO/QA pruebe el arrastre con ratón en las 5 columnas. |
+
+Capturas: se tomaron en el navegador (no se guardan en el repo).
+
+### Estados propuestos en `docs/TASKS.md` (no aplicados)
+
+No edité `docs/TASKS.md` en esta ronda porque otra sesión lo estaba modificando (el editor rechazó los cambios). Propuesta para aplicarla cuando el archivo esté libre:
+- HECHO: P00, T10, T11, T12, C01, V00.
+- Mantener EN QA: C02 (falta Turso real), K01 (falta arrastre con ratón en 5 columnas y Alt+flechas).
+- C03: sin cambio (DEVUELTA por el Arquitecto); no se prueba hasta EN QA.
+- QP1: sin cambio (DEVUELTA).
+
+### Pendiente de QA
+
+- C02: prueba contra Turso real (BD de prueba en la nube), o decisión sobre aceptarlo como no verificado.
+- K01: arrastre con ratón en las 5 columnas y Alt+←/→.
+- C03: volver a probar cuando esté EN QA (icacls en Windows).
+- QP1: volver a probar cuando el Senior corrija el README.
+- QM0: pendiente (aún PENDIENTE en TASKS).
