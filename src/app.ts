@@ -3,11 +3,13 @@ import express from 'express';
 import type { Express } from 'express';
 import type { Client } from '@libsql/client';
 import { errorHandler, notFoundHandler } from './middleware/errors.ts';
+import type { EventBus } from './events/bus.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 export interface AppDeps {
   db: Client;
   corsOrigin: string;
+  bus: EventBus;
 }
 
 /** Crea la app Express sin escuchar (exportable para tests). */

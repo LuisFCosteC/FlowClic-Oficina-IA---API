@@ -35,7 +35,7 @@ Cada tarea de DEV pasa a `EN QA`; QA la verifica contra su criterio y la marca `
 | T21 | `middleware/errors.ts`: formato de error único de PLAN §5; errores zod → 400 con `details`; rutas inexistentes → 404 JSON; 500 sin stack. | DEV | EN QA | Body inválido devuelve 400 con forma `{error:{code,message,details}}`. |
 | T22 | `domain/types.ts` y `domain/schemas.ts`: DTOs de PLAN §6 (uniones de string, sin `enum`) y esquemas zod de entrada. | DEV | EN QA | `npm run typecheck` pasa; no hay `enum` en el código. |
 | T23 | `events/bus.ts`: bus tipado de `DomainEvent` (tipos de la tabla SSE de PLAN §6). | DEV | EN QA | Test unitario: un suscriptor recibe el evento emitido con su payload tipado. |
-| T24 | Infra de tests: helper que crea BD temporal en `os.tmpdir()`, migra, siembra, levanta la app en puerto efímero y la cierra. | DEV | PENDIENTE | `npm test` corre un test de `/api/health` en verde y no crea/modifica `local.db`. |
+| T24 | Infra de tests: helper que crea BD temporal en `os.tmpdir()`, migra, siembra, levanta la app en puerto efímero y la cierra. | DEV | EN QA | `npm test` corre un test de `/api/health` en verde y no crea/modifica `local.db`. |
 
 ## Bloque 3 — Agentes
 
@@ -118,3 +118,4 @@ Después de T80: el Arquitecto revisa el código, este archivo y `QA_REPORT.md`,
 - **T21** — middleware/errors.ts: AppError (+helpers notFound/conflict/unprocessable/validation), errorHandler (zod→400 con details, JSON inválido→400, 500 sin stack) y notFoundHandler JSON para cualquier ruta; registrados en app.ts. Probar: `curl localhost:4000/api/nada` → 404 NOT_FOUND con forma {error:{code,message,details}}; POST con JSON roto → 400 VALIDATION_ERROR. El 400 con details de zod se ejerce al llegar las rutas con schemas.
 - **T22** — domain/types.ts (DTOs PLAN §6, uniones de string) y domain/schemas.ts (zod de entrada: agentes, tickets, aprobaciones, memoria, queries; los PATCH son estrictos y rechazan campos desconocidos, p. ej. `status` en PATCH /agents/:id). Probar: `npm run typecheck`; `grep -rn "enum " src` (solo z.enum).
 - **T23** — events/bus.ts: EventBus tipado (`emit`, `on(tipo)`, `onAny`, baja por función devuelta) con DomainEventMap = tabla SSE de PLAN §6; test/bus.test.ts (3 tests). Desviación menor: el script `test` usa glob (`node --test "test/**/*.test.ts"`) porque `node --test test/` falla en Node 24. Probar: `npm test`.
+- **T24** — Infra de tests: test/helpers/testApp.ts (`startTestApp({seed?})`: BD temporal en os.tmpdir(), migra, siembra, app en puerto efímero, `request()` y `close()` que borra la BD temporal); test/health.test.ts. AppDeps ahora incluye `bus` (server.ts lo crea). Probar: `npm test` (5 tests en verde) y comprobar que no aparece local.db.

@@ -1,9 +1,10 @@
 import { env } from './config/env.ts';
 import { getDb } from './db/client.ts';
 import { createApp } from './app.ts';
+import { createBus } from './events/bus.ts';
 
 const db = await getDb();
-const app = createApp({ db, corsOrigin: env.CORS_ORIGIN });
+const app = createApp({ db, corsOrigin: env.CORS_ORIGIN, bus: createBus() });
 
 const server = app.listen(env.PORT, () => {
   console.log(`API escuchando en http://localhost:${env.PORT}`);
