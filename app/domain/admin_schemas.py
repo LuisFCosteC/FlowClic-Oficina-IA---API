@@ -95,3 +95,34 @@ class UserUpdate(StrictInput):
     display_name: Annotated[str, Field(min_length=1, max_length=80)] | None = None
     role: UserRole | None = None
     disabled: bool | None = None
+
+
+# ── Conexión de BD y backup (A05) ────────────────────────────────────────────────────────────
+class DbStatus(CamelModel):
+    """Estado de la conexión. NUNCA incluye la URL completa ni el token (solo `hasToken`)."""
+
+    mode: Literal["local", "remote"]
+    host: str
+    connected: bool
+    schema_version: int | None
+    has_token: bool
+    last_backup_at: str | None
+
+
+class DbTestBody(StrictInput):
+    url: Annotated[str, Field(min_length=1, max_length=500)]
+    auth_token: Annotated[str, Field(max_length=4000)] | None = None
+
+
+class DbTestResult(CamelModel):
+    ok: bool
+    mode: Literal["local", "remote"]
+    host: str
+    schema_version: int | None
+    will_create: bool
+
+
+class BackupResult(CamelModel):
+    folder: str
+    tables: dict[str, int]
+    created_at: str

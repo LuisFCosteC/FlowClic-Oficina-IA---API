@@ -566,3 +566,23 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - **A07b** `GET /api/admin/users` → `[{"id","email","displayName","role":"ADMIN"|"OPERATOR"|"VIEWER","mfaEnabled":false,"lastLoginAt":null,"disabledAt":null,"createdAt","updatedAt"}]`. `POST` `{"email","displayName","role","password"}` → 201 con el usuario (sin contraseña); contraseña < 12 caracteres, email inválido o rol desconocido → 400; email repetido (sin distinguir mayúsculas) → 409. `PATCH /api/admin/users/{id}` `{"displayName"?,"role"?,"disabled"?: true|false}` → 200 (null o campo extra → 400; 404 si no existe). Desactivar o degradar al **último ADMIN activo** → 409 `CONFLICT` (mensaje claro). Desactivar revoca sus sesiones. `POST /api/admin/users/{id}/revoke-sessions` → 501 `NOT_IMPLEMENTED` hasta que exista S06 (404 si el usuario no existe).
   - Probar: `pytest tests/test_admin_audit_users_api.py`.
 
+- **ADM01 (Dev Junior, 2026-11-23, EN QA)** — Gestión de Espacios de trabajo (Workspaces en FRONT):
+  - Añadida pestaña activa **"Espacios de trabajo"** (`workspaces`) en `AdminView.tsx` y componente `WorkspacesPanel.tsx`.
+  - Tabla completa con ID, Nombre, Ruta local (monospace protegida) y Estado en vivo.
+  - Botón **"Añadir espacio"** con modal que valida campos requeridos (id, name, path) y crea vía `PUT /api/admin/workspaces/{id}`.
+  - Botón **"Editar"** que precarga el espacio y actualiza name y path vía `PUT`.
+  - Botón **"Comprobar"** por fila que invoca `POST /api/admin/workspaces/{id}/check` y muestra badge reactivo: Disponible (RW), Solo lectura (R), No es carpeta o No existe.
+  - Botón **"Eliminar"** con modal de confirmación en UI (sin `window.confirm`) que captura y renderiza el error 409 `CONFLICT` si el espacio está asignado a agentes.
+  - Banner y avisos informativos en vista y modal: *"La ruta solo la usa el servidor; los agentes nunca la ven"*.
+  - Eliminado `bun.lock` y verificado funcionamiento con `npm ci` / `npm install`.
+  - Probar: Ir a Administración → pestaña "Espacios de trabajo"; crear un workspace (ej: `test-ws`, "Test", "D:\\PROGRAMACION"); pulsar "Comprobar" y verificar que el badge cambia a verde "Disponible (RW)"; pulsar "Editar" y modificar el nombre; probar borrar un workspace y verificar confirmación modal en UI y manejo de 409.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 464ms). Commit `4d5ece4` en `dev` del FRONT.
+
+
+- **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
+  - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
+  - `POST /api/admin/db/test` `{"url","authToken"?}` → 200 `{"ok":true,"mode","host","schemaVersion":8|null,"willCreate":false}`. Solo `file:`, `libsql://` y `https://` (otro → 400); espera máxima 5 s; no migra, no guarda y no crea archivos (`file:` inexistente → `willCreate:true`). No conecta o no es una BD → 422 con mensaje genérico (sin URL ni token).
+  - `PUT /api/admin/db` `{"url","authToken"?}` → 200 con el mismo objeto que `GET`. **403 `FORBIDDEN` si `ADMIN_ALLOW_DB_CHANGE` no es `true` (por defecto es false; el `.env.example` lo trae en false).** Prueba y migra la BD nueva (422 y nada cambia si falla), guarda URL y token en la bóveda, cambia en caliente (`GET /api/agents` ya lee de la nueva) y emite SSE `system.db_changed` `{"mode","host","at"}`. `authToken` vacío conserva el token guardado SOLO si el host no cambia; con otro host se borra. Cambiar de BD no copia datos. Si la BD nueva no tiene ADMIN, el asistente de setup se reabre (código en la consola). Auditoría `admin.db_changed` (en la BD nueva) solo con `mode` y `host`. El front debe volver al login/snapshot al recibir el evento. Pendiente de S06: revocar sesiones tras el cambio.
+  - `POST /api/admin/backup` → 200 `{"folder":"backups/20261123T141810Z","tables":{"agents":4,...},"createdAt"}`. Carpeta y archivos con permisos solo para el propietario; excluye `sessions`; dos backups seguidos no se pisan; auditoría `admin.backup_created`.
+  - Probar: `pytest tests/test_admin_db_api.py`.
+

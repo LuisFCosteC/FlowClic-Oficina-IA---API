@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     backup_dir: str = "backups"
     backup_interval_hours: int = 24
     backup_keep: int = 14
-    admin_allow_db_change: bool = True
+    admin_allow_db_change: bool = False  # exige ADMIN_ALLOW_DB_CHANGE=true
 
     @field_validator("port")
     @classmethod
