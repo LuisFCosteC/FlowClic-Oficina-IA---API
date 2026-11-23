@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     docs_enabled: bool | None = None
 
     # Seguridad (PLAN §12.5). Las claves las genera `python scripts/setup_env.py`.
-    app_encryption_key: str | None = None
+    app_master_key: str | None = None
     session_secret: str | None = None
     session_idle_minutes: int = 30
     session_max_hours: int = 8
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
             raise ValueError("debe ser un entero >= 1")
         return v
 
-    @field_validator("app_encryption_key")
+    @field_validator("app_master_key")
     @classmethod
     def _key_is_32_bytes(cls, v: str | None) -> str | None:
         if v is None:
@@ -79,7 +79,7 @@ class Settings(BaseSettings):
         if self.node_env == "production":
             missing = [
                 name.upper()
-                for name in ("app_encryption_key", "session_secret")
+                for name in ("app_master_key", "session_secret")
                 if not getattr(self, name)
             ]
             if missing:

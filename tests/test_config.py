@@ -54,15 +54,15 @@ def test_sin_url_el_proceso_termina_con_mensaje_claro_y_codigo_distinto_de_cero(
 def test_produccion_exige_claves_y_apaga_docs_por_defecto() -> None:
     with pytest.raises(ValidationError, match="obligatorias en producción"):
         make(node_env="production")
-    s = make(node_env="production", app_encryption_key=KEY, session_secret=KEY)
+    s = make(node_env="production", app_master_key=KEY, session_secret=KEY)
     assert s.docs_active is False
-    prod = {"node_env": "production", "app_encryption_key": KEY, "session_secret": KEY}
+    prod = {"node_env": "production", "app_master_key": KEY, "session_secret": KEY}
     assert make(**prod, docs_enabled="true").docs_active
 
 
 def test_clave_de_cifrado_debe_ser_32_bytes() -> None:
     with pytest.raises(ValidationError, match="32 bytes"):
-        make(app_encryption_key="corta")
+        make(app_master_key="corta")
 
 
 def test_variable_vacia_equivale_a_no_definida(monkeypatch: pytest.MonkeyPatch) -> None:
