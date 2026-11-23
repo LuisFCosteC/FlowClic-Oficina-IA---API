@@ -1,5 +1,7 @@
 """Repositorio de tickets: lectura, alta y cambio de estado (G05 parcial)."""
 
+import json
+
 from app.db.database import Database, Row
 from app.domain.schemas import Ticket
 
@@ -25,6 +27,12 @@ def row_to_ticket(r: Row) -> Ticket:
             "position": r["position"],
             "created_at": r["created_at"],
             "updated_at": r["updated_at"],
+            "objective": r["objective"],
+            "acceptance_criteria": json.loads(r["acceptance_criteria"]),
+            "actions": json.loads(r["actions"]),
+            "restrictions": json.loads(r["restrictions"]),
+            "dependencies": json.loads(r["dependencies"]),
+            "model": r["model"],
         }
     )
 
@@ -44,8 +52,9 @@ def get_ticket(db: Database, ticket_id: str) -> Ticket | None:
 def insert_ticket(db: Database, t: Ticket) -> None:
     db.execute(
         "INSERT INTO tickets (id, title, description, status, priority, assigned_agent_id,"
-        " project, model_tier, estimated_cost_usd, position, created_at, updated_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " project, model_tier, estimated_cost_usd, position, created_at, updated_at,"
+        " objective, acceptance_criteria, actions, restrictions, dependencies, model)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             t.id,
             t.title,
@@ -59,6 +68,12 @@ def insert_ticket(db: Database, t: Ticket) -> None:
             t.position,
             t.created_at,
             t.updated_at,
+            t.objective,
+            json.dumps(t.acceptance_criteria, ensure_ascii=False),
+            json.dumps(t.actions, ensure_ascii=False),
+            json.dumps(t.restrictions, ensure_ascii=False),
+            json.dumps(t.dependencies, ensure_ascii=False),
+            t.model,
         ),
     )
 

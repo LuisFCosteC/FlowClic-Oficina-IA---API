@@ -167,6 +167,12 @@ class Ticket(CamelModel):
     position: int
     created_at: str
     updated_at: str
+    objective: str = ""
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    actions: list[str] = Field(default_factory=list)
+    restrictions: list[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
+    model: str | None = None
 
 
 class TicketCreate(StrictInput):
@@ -178,6 +184,12 @@ class TicketCreate(StrictInput):
     project: ProjectName | None = None
     model_tier: ModelTier | None = None
     estimated_cost_usd: Money | None = None
+    objective: LongText | None = None
+    acceptance_criteria: ProfileList = Field(default_factory=list)
+    actions: ProfileList = Field(default_factory=list)
+    restrictions: ProfileList = Field(default_factory=list)
+    dependencies: ProfileList = Field(default_factory=list)
+    model: Ref | None = None
 
 
 class TicketUpdate(StrictInput):

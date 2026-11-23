@@ -6,6 +6,8 @@ Pendiente: `actingAgentId` y permisos por agente (S09), edición/reasignación/b
 import json
 
 from app.db.database import Database
+from app.domain.agent_policy import GLOBAL_RESTRICTIONS
+from app.domain.models_catalog import MODEL_IDS
 from app.domain.schemas import Agent, Ticket, TicketCreate, TicketTransitionBody
 from app.domain.ticket_flow import PROTECTED_AGENT_STATUSES, agent_status_for, can_transition
 from app.errors import AppError, not_found, validation_error
@@ -23,6 +25,21 @@ STATUS_LABEL = {
     "DONE": "HECHO",
     "RETURNED": "DEVUELTA",
 }
+
+
+def _norm(text: str) -> str:
+    return " ".join(text.split()).casefold()
+
+
+def _clean_list(items: list[str]) -> list[str]:
+    return [i.strip() for i in items if i.strip()]
+
+
+def _task_restrictions(items: list[str]) -> list[str]:
+    """Las restricciones de la tarea se suman a las 5 globales; una que coincida con una global
+    se descarta (como en G02): las globales no se pueden quitar ni duplicar."""
+    globals_ = {_norm(g) for g in GLOBAL_RESTRICTIONS}
+    return [r for r in _clean_list(items) if _norm(r) not in globals_]
 
 
 def ticket_payload(t: Ticket) -> dict[str, object]:
@@ -46,6 +63,11 @@ def create_ticket(db: Database, bus: EventBus | None, data: TicketCreate) -> Tic
     title = data.title.strip()
     if not title:
         raise validation_error("El título no puede estar vacío")
+    if data.model is not None and data.model not in MODEL_IDS:
+        raise validation_error(
+            f"model: modelo desconocido: {data.model}",
+            [{"path": "model", "message": f"modelo desconocido: {data.model}"}],
+        )
     now = now_iso()
     row = db.fetch_one("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM tickets")
     ticket = Ticket(
@@ -61,6 +83,12 @@ def create_ticket(db: Database, bus: EventBus | None, data: TicketCreate) -> Tic
         position=int(row["p"]) if row else 0,
         created_at=now,
         updated_at=now,
+        objective=(data.objective or "").strip(),
+        acceptance_criteria=_clean_list(data.acceptance_criteria),
+        actions=_clean_list(data.actions),
+        restrictions=_task_restrictions(data.restrictions),
+        dependencies=_clean_list(data.dependencies),
+        model=data.model,
     )
     with db.transaction() as tx:
         repo.insert_ticket(tx, ticket)
