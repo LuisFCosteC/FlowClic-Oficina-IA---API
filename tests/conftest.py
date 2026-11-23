@@ -18,3 +18,12 @@ def raw_db(request: pytest.FixtureRequest, db_url: str) -> Iterator[Database]:
     db = connect_database(db_url, driver=request.param)
     yield db
     db.close()
+
+
+@pytest.fixture
+def migrated_db(raw_db: Database) -> Database:
+    """BD temporal con todas las migraciones aplicadas (ambos drivers)."""
+    from app.db.migrate import migrate
+
+    migrate(raw_db)
+    return raw_db
