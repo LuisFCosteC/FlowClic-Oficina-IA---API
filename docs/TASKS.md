@@ -1,6 +1,6 @@
 # FlowClic Oficina IA — Tareas Fase 1
 
-Referencia: `docs/PLAN.md`. Estados: `PENDIENTE` · `EN CURSO` · `EN QA` · `EN REVISIÓN` · `HECHO` · `DEVUELTA`. **Equipo desde 2026-11-22: Junior A (DEV), Junior QA (QA), Claude = revisores (ver "AMPLIACIÓN (g)" al final).**
+Referencia: `docs/PLAN.md`. Estados: `PENDIENTE` · `EN CURSO` · `EN QA` · `EN REVISIÓN` · `HECHO` · `DEVUELTA`. **Equipo vigente: ver "AMPLIACIÓN (i)" al final (Dev Senior = Sonnet, Dev Junior = Antigravity, QA Junior = Antigravity, QA Senior = Haiku).**
 Reglas: rama `dev`; sin rutas absolutas en código; preguntar antes de añadir dependencias no listadas en PLAN §8.
 Si hay una duda, añade debajo de la tarea una línea `> PREGUNTA PARA ARQUITECTO: ...` y sigue con otra tarea.
 Cada tarea de DEV pasa a `EN QA`; QA la verifica contra su criterio y la marca `HECHO` o `DEVUELTA` (con detalle en `docs/QA_REPORT.md`).
@@ -392,3 +392,31 @@ _(Cada sesión que se detiene escribe aquí: tareas EN CURSO y su estado exacto,
 | P03 | Documentación de la API bajo `/api/docs` (ver arriba): rutas movidas, `/docs` en la raíz → 404, acceso solo local hasta S09 y con sesión ADMIN/OPERATOR desde S09; `DOCS_ENABLED=false` → 404 también en `/api/docs`. | DEV | PENDIENTE | Sin sesión (después de S09) `/api/docs` y `/api/openapi.json` → 401; con OPERATOR → 200; `/docs` → 404. |
 
 **Orden para Junior A:** terminar lo de "AMPLIACIÓN (g)" (V3D02 → H01 → H02 → V3D03–V3D06) **corrigiendo antes C04** (DEVUELTA) y añadiendo **P03** y la ampliación de **S01** en cuanto toque la seguridad.
+
+
+---
+
+# AMPLIACIÓN 2026-11-22 (i): EQUIPO NUEVO Y PRIORIDAD "DATOS REALES YA" (manda sobre (g) y (h))
+
+**BD en Turso creada por el Arquitecto (2026-11-22):** esquema `001`, `002` y `005` aplicado; **9 tablas y 0 filas**. No hay datos de ejemplo. La URL y el token siguen en el `.env` hasta que la API arranque y C03 los importe a la bóveda (antes hay que ejecutar `python scripts/setup_env.py` para añadir `APP_MASTER_KEY`). **Nadie lee el `.env` ni `data/vault.db`.**
+
+## Equipo
+| Rol | Herramienta | Repo principal | Hace | Mueve tareas |
+|---|---|---|---|---|
+| **Desarrollador Senior** | Claude Sonnet | API | Implementa la API y **revisa** al Junior | API: `EN CURSO → EN QA`; revisión del FRONT: `EN REVISIÓN → HECHO / DEVUELTA` |
+| **Desarrollador Junior** | Antigravity | FRONT | Implementa el FRONT | `EN CURSO → EN QA` |
+| **QA Junior** | Antigravity | ambos | Prueba contra el criterio | `EN QA → EN REVISIÓN / DEVUELTA` |
+| **QA Senior** | Claude Haiku | ambos | Valida el veredicto del QA Junior y las auditorías de seguridad (5 campos) | `EN REVISIÓN → HECHO / DEVUELTA` (las tareas de API las cierra el QA Senior; las de FRONT, el Dev Senior **y** el QA Senior) |
+
+Reglas para no pisarse: cada uno hace `git pull` antes de empezar y antes de cada commit; solo edita **su fila** de estado y sus notas en TASKS.md; el Junior Dev no toca la API y el Senior Dev no toca el FRONT (salvo revisión).
+
+## Prioridad: borrar los datos de ejemplo y crear agentes reales en la BD
+**Desarrollador Senior (API):** C04 (corregir la DEVUELTA) → T30 → G02 → G03 (plantillas + "Cargar equipo base") → T31 → T32 → T61 → T60 → G04 → después H01 y S01 (con #10) y P03.
+**Desarrollador Junior (FRONT):**
+1. **F05**
+2. **T75-parte 1 YA:** eliminar del FRONT `INITIAL_AGENTS`, `INITIAL_TASKS` e `INITIAL_PROPOSALS`, con estados vacíos y el botón "Crear primer agente" en Kanban, Cerebro, 3D y Administración, sin errores con 0 agentes.
+3. T70 → T71 → T72 → T74 → T75-parte 2 (conectar a `/api/snapshot` y SSE cuando T61/T60 estén EN QA).
+4. **G07** (modal con plantillas) → F03a-conexión (pestaña Agentes real + botón "Cargar equipo base" → `POST` de G03) → G08.
+5. Después V3D02 → H02 → V3D03–V3D06.
+
+**Hito "agentes reales" (QM0):** con la BD de Turso, crear un agente desde el modal (o cargar el equipo base), verlo en todas las vistas, recargar y que siga ahí; ningún dato de ejemplo visible.
