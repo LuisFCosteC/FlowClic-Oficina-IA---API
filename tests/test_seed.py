@@ -1,7 +1,14 @@
 import json
+from pathlib import Path
 
-from app.db.database import Database
-from app.db.seed import seed
+import pytest
+
+from app.config import Settings
+from app.db.bootstrap import build_vault
+from app.db.database import Database, connect_database
+from app.db.migrate import migrate
+from app.db.seed import main, seed
+from app.security.crypto import generate_master_key
 
 
 def count(db: Database, table: str) -> int:
@@ -48,3 +55,27 @@ def test_la_semilla_no_crea_usuarios_ni_credenciales(migrated_db: Database) -> N
     seed(migrated_db)
     assert count(migrated_db, "users") == 0
     assert count(migrated_db, "sessions") == 0
+
+
+def test_migrate_solo_crea_el_esquema_la_bd_empieza_vacia(migrated_db: Database) -> None:
+    for table in ("agents", "tickets", "ticket_events", "approvals", "project_memory", "users"):
+        assert count(migrated_db, table) == 0
+
+
+def test_cli_sin_demo_no_siembra_nada_y_con_demo_si(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    key = generate_master_key()
+    monkeypatch.setenv("APP_MASTER_KEY", key)
+    url = "file:" + (tmp_path / "main.db").as_posix()
+    vault = build_vault(Settings(_env_file=None, app_master_key=key))  # type: ignore[call-arg]
+    vault.set_secret("db.url", url)
+    vault.close()
+    db = connect_database(url)
+    migrate(db)
+    assert main([]) == 0
+    assert "Nada que hacer" in capsys.readouterr().out
+    assert count(db, "agents") == 0
+    assert main(["--demo"]) == 0
+    assert count(db, "agents") == 4
+    db.close()

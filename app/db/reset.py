@@ -1,7 +1,7 @@
-"""Reinicia la BD local: borra el archivo y ejecuta migrate + seed.
+"""Reinicia la BD local: borra el archivo y ejecuta migrate (esquema vacio).
 
-Uso: `python -m app.db.reset`. Se niega si la URL guardada en la bóveda no empieza por `file:`
-(nunca toca una base remota como Turso).
+Uso: `python -m app.db.reset` (vacia) o `python -m app.db.reset --demo` (con datos de ejemplo).
+Se niega si la URL guardada en la boveda no empieza por `file:` (nunca toca Turso).
 """
 
 import sys
@@ -27,7 +27,9 @@ def local_path(url: str) -> Path | None:
     return Path(target)
 
 
-def reset_database(url: str, driver: Literal["libsql", "sqlite"] = "libsql") -> None:
+def reset_database(
+    url: str, driver: Literal["libsql", "sqlite"] = "libsql", demo: bool = False
+) -> None:
     path = local_path(url)  # valida ANTES de borrar nada
     if path is not None:
         base = path if path.is_absolute() else Path.cwd() / path
@@ -36,16 +38,22 @@ def reset_database(url: str, driver: Literal["libsql", "sqlite"] = "libsql") -> 
     db = connect_database(url, driver=driver)
     try:
         migrate(db)
-        seed(db)
+        if demo:
+            seed(db)
     finally:
         db.close()
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
     from app.config import get_settings
     from app.db.bootstrap import build_vault
     from app.security.vault import VaultError
 
+    parser = argparse.ArgumentParser(description="Reinicia la BD local.")
+    parser.add_argument("--demo", action="store_true", help="carga datos de ejemplo")
+    args = parser.parse_args(argv)
     settings = get_settings()
     try:
         vault = build_vault(settings)
@@ -63,11 +71,11 @@ def main() -> int:
         print("No hay conexión de BD configurada (modo SETUP). No se hizo nada.", file=sys.stderr)
         return 1
     try:
-        reset_database(url, settings.db_driver)
+        reset_database(url, settings.db_driver, demo=args.demo)
     except ResetRefused as exc:
         print(exc, file=sys.stderr)  # no se imprime la URL: puede llevar datos sensibles
         return 1
-    print("Base local reiniciada: migraciones y semilla aplicadas.")
+    print("Base local reiniciada" + (" con datos de demostracion." if args.demo else " (vacia)."))
     return 0
 
 

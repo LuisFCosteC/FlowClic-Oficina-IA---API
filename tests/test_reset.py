@@ -18,9 +18,17 @@ def agent_count(url: str) -> int:
         db.close()
 
 
-def test_reset_borra_y_recrea_la_bd_local(tmp_path: Path) -> None:
+def test_reset_deja_la_bd_vacia_por_defecto_y_con_demo_trae_ejemplos(tmp_path: Path) -> None:
     url = "file:" + (tmp_path / "local.db").as_posix()
     reset_database(url)
+    assert agent_count(url) == 0
+    reset_database(url, demo=True)
+    assert agent_count(url) == 4
+
+
+def test_reset_borra_y_recrea_la_bd_local(tmp_path: Path) -> None:
+    url = "file:" + (tmp_path / "local.db").as_posix()
+    reset_database(url, demo=True)
     assert agent_count(url) == 4
     db = connect_database(url)
     db.execute("DELETE FROM agents WHERE id = 'raj'")
@@ -29,7 +37,7 @@ def test_reset_borra_y_recrea_la_bd_local(tmp_path: Path) -> None:
         " VALUES ('x', 'NOTE', 'extra', 'a', 'a')"
     )
     db.close()
-    reset_database(url)  # vuelve al estado inicial
+    reset_database(url, demo=True)  # vuelve al estado inicial
     assert agent_count(url) == 4
 
 
@@ -51,7 +59,7 @@ def test_cli_con_libsql_en_la_boveda_termina_sin_borrar_y_con_mensaje(
     vault.close()
     sentinel = tmp_path / "local.db"
     sentinel.write_text("no me borres")
-    assert main() == 1
+    assert main([]) == 1
     err = capsys.readouterr().err
     assert "solo funciona con bases locales" in err
     assert "secreta-org" not in err  # no se imprime la URL
@@ -65,5 +73,7 @@ def test_cli_con_bd_local_de_la_boveda(tmp_path: Path, monkeypatch: pytest.Monke
     vault = build_vault(Settings(_env_file=None, app_master_key=key))  # type: ignore[call-arg]
     vault.set_secret("db.url", url)
     vault.close()
-    assert main() == 0
+    assert main([]) == 0
+    assert agent_count(url) == 0  # vacia por defecto
+    assert main(["--demo"]) == 0
     assert agent_count(url) == 4

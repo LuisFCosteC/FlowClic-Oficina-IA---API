@@ -1,4 +1,7 @@
-"""Datos de ejemplo idempotentes (`INSERT OR IGNORE`). Uso: `python -m app.db.seed`.
+"""Datos de DEMOSTRACION idempotentes (`INSERT OR IGNORE`).
+
+La BD empieza VACIA: `migrate` solo crea el esquema. Estos datos de ejemplo son opcionales y
+no se cargan nunca por defecto: `python -m app.db.seed --demo`.
 
 La semilla NO crea usuarios ni credenciales: el primer ADMIN se crea desde el asistente de
 primer arranque o con `python scripts/admin_create.py` (PLAN §12.1 #13).
@@ -141,10 +144,19 @@ def seed(db: Database) -> None:
         )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
     from app.config import get_settings
     from app.db.bootstrap import open_configured_database
     from app.security.vault import VaultError
+
+    parser = argparse.ArgumentParser(description="Carga datos de demostracion (opcional).")
+    parser.add_argument("--demo", action="store_true", help="carga los datos de ejemplo")
+    args = parser.parse_args(argv)
+    if not args.demo:
+        print("Nada que hacer: la BD empieza vacia. Usa --demo para cargar datos de ejemplo.")
+        return 0
 
     try:
         opened = open_configured_database(get_settings())
@@ -152,13 +164,13 @@ def main() -> int:
         print(exc, file=sys.stderr)
         return 1
     if opened is None:
-        print("No hay conexión de BD configurada (modo SETUP).", file=sys.stderr)
+        print("No hay conexion de BD configurada (modo SETUP).", file=sys.stderr)
         return 1
     db, vault = opened
     try:
         seed(db)
         n = db.fetch_one("SELECT COUNT(*) AS n FROM agents")
-        print(f"Semilla aplicada. Agentes en la BD: {n['n'] if n else 0}")
+        print(f"Datos de demostracion cargados. Agentes en la BD: {n['n'] if n else 0}")
     finally:
         db.close()
         vault.close()
