@@ -12,7 +12,7 @@ from app.config import Settings, get_settings
 from app.db.database import Database, clear_db, set_db, try_get_db
 from app.errors import register_error_handlers
 from app.events.bus import EventBus, get_bus
-from app.middleware import SetupModeMiddleware
+from app.middleware import SecurityMiddleware, SetupModeMiddleware
 from app.realtime.sse import SSEHub
 from app.routers import agent_templates, agents, events, health, messages, setup, snapshot
 from app.security.setup_gate import SetupGate
@@ -100,6 +100,7 @@ def create_app(
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],
     )
+    app.add_middleware(SecurityMiddleware)  # el más externo: sus cabeceras salen en TODA respuesta
     app.include_router(health.router)
     app.include_router(setup.router)
     app.include_router(agent_templates.router)

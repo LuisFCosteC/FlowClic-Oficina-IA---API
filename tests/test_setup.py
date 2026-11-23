@@ -85,7 +85,7 @@ def test_las_demas_rutas_devuelven_503_setup_required_pero_health_y_docs_viven(e
     assert env.local.get("/api/tickets").status_code == 503
     health = env.local.get("/api/health")
     assert health.status_code == 200
-    assert health.json()["db"] == "setup"
+    assert health.json() == {"ok": True}
     assert env.local.get("/docs").status_code == 200
 
 
@@ -114,7 +114,7 @@ def test_flujo_completo_bd_admin_y_cierre(env: Env) -> None:
     assert env.vault.get_secret("db.auth_token") == TOKEN
     db = try_get_db()
     assert db is not None
-    assert env.local.get("/api/health").json()["db"] == "up"
+    assert env.local.get("/api/health").json() == {"ok": True}
     # ya con BD, las demás rutas dejan de dar 503 (aquí 404: aún no existen)
     assert env.local.get("/api/agents").status_code != 503
     # la BD empieza vacía
@@ -243,7 +243,7 @@ def test_arrancar_con_bd_en_la_boveda_no_entra_en_modo_setup(tmp_path: Path) -> 
     db.close()
     app = create_app(settings, None, vault)
     with TestClient(app, base_url="http://localhost", client=("127.0.0.1", 1)) as c:
-        assert c.get("/api/health").json()["db"] == "up"
+        assert c.get("/api/health").json() == {"ok": True}
         assert c.get("/api/setup/status").json() == {
             "setupRequired": True,
             "hasDatabase": True,

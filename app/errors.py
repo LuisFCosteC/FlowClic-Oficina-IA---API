@@ -131,5 +131,12 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def _unhandled(req: Request, exc: Exception) -> JSONResponse:
         # Sin stack ni detalles internos en la respuesta; el log lleva solo el tipo y la ruta.
-        log.error("error no controlado en %s %s: %s", req.method, req.url.path, type(exc).__name__)
+        rid = getattr(req.state, "request_id", "-")
+        log.error(
+            "[%s] error no controlado en %s %s: %s",
+            rid,
+            req.method,
+            req.url.path,
+            type(exc).__name__,
+        )
         return error_response(500, "INTERNAL", "Error interno del servidor")
