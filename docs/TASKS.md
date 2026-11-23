@@ -637,6 +637,15 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Probar: Ir a Administración → pestaña "Auditoría"; verificar las entradas de acciones previas (ej. cambios de settings, agentes, límites); filtrar por acción escribiendo "settings" o seleccionando fechas; pulsar "Ver meta" en una fila y comprobar que el JSON se despliega en texto plano de solo lectura.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 441ms). Commit `55a275b` en `dev` del FRONT.
 
+- **ADM08 (Dev Junior, 2026-11-23, EN QA)** — Gestión de Usuarios y Roles (A07b en FRONT):
+  - Habilitada pestaña **"Usuarios"** (`users`) en `AdminView.tsx` y creado componente `UsersPanel.tsx`.
+  - Tabla completa consumiendo `GET /api/admin/users`: email, nombre para mostrar, rol (ADMIN, OPERATOR, VIEWER), estado de MFA y estado (activo/desactivado).
+  - Modal **"Crear usuario"** (`POST /api/admin/users`) con validación de contraseña de mínimo 12 caracteres (campo `type="password"`, nunca almacenado en cliente, vaciado al guardar y al desmontar).
+  - Modal **"Cambiar rol"** y botón **"Activar/Desactivar"** (`PATCH /api/admin/users/{id}`) con captura y despliegue del error 409 `CONFLICT` si se intenta degradar o desactivar al último ADMIN activo.
+  - Botón **"Revocar sesiones"** en la tabla en estado deshabilitado con tooltip explicativo: *"Disponible tras el login (S06)"*.
+  - Probar: Ir a Administración → pestaña "Usuarios"; crear un usuario nuevo con contraseña >= 12 caracteres; intentar degradar o desactivar al único administrador y comprobar el mensaje de rechazo 409; cambiar el rol a un operador; verificar el tooltip de revocar sesiones.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 465ms). Commit `d5a95e6` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
