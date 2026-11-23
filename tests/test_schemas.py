@@ -130,3 +130,28 @@ def test_no_se_usa_enum_de_python_en_la_app() -> None:
             if obj.__module__ == module.__name__:
                 assert not issubclass(obj, enum.Enum), f"{info.name}.{obj.__name__}"
     assert schemas.AgentStatus is not None
+
+
+def test_avatar_apariencia_completa_opcional():
+    """Los campos de apariencia completa son opcionales y no aparecen si no se definen."""
+    from app.domain.schemas import AgentAvatar
+
+    basico = AgentAvatar(color="#10B981", hair_style="bun").model_dump(by_alias=True)
+    assert basico == {"color": "#10B981", "glasses": None, "hairStyle": "bun"}
+
+    completo = AgentAvatar(
+        color="#10B981",
+        gender="female",
+        hair_style="ponytail",
+        hair_color="#2C1B12",
+        skin_tone="#F4C29F",
+        face="smile",
+        top_style="jacket",
+        top_color="#2D5A27",
+        inner_color="#7A7D80",
+        pants_style="skirt",
+        pants_color="#4A453E",
+        shoe_color="#222222",
+    ).model_dump(by_alias=True)
+    assert completo["topStyle"] == "jacket" and completo["pantsStyle"] == "skirt"
+    assert completo["skinTone"] == "#F4C29F" and completo["shoeColor"] == "#222222"

@@ -7,7 +7,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 from pydantic.alias_generators import to_camel
 
 AgentStatus = Literal["IDLE", "WORKING", "REVIEW", "BLOCKED", "SLEEP_QUOTA"]
@@ -18,7 +18,14 @@ ModelTier = Literal["opus_pro", "sonnet_pro", "haiku_flash"]
 ApprovalStatus = Literal["PENDING", "APPROVED", "REJECTED", "CANCELLED"]
 ApprovalCategory = Literal["Arquitectura", "Despliegue", "Seguridad", "Datos"]
 MemoryKind = Literal["NOTE", "DECISION"]
-HairStyle = Literal["short", "long", "curly", "bun", "parted"]
+HairStyle = Literal[
+    "short", "long", "curly", "bun", "parted", "ponytail", "spiky", "bob", "bald"
+]
+Gender = Literal["male", "female", "neutral"]
+FaceStyle = Literal["neutral", "smile", "serious", "worried"]
+TopStyle = Literal["tshirt", "jacket", "hoodie", "suit", "dress"]
+PantsStyle = Literal["pants", "shorts", "skirt"]
+HexColor = Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{3,8}$")]
 TicketEventType = Literal[
     "CREATED",
     "UPDATED",
@@ -51,10 +58,45 @@ class StrictInput(CamelModel):
 
 
 # ── Agentes ──────────────────────────────────────────────────────────────────────────────────
+# Campos de apariencia completa (opcionales): si no se definen, no aparecen en la salida.
+_LOOK_KEYS = (
+    "gender",
+    "skin_tone",
+    "hair_color",
+    "face",
+    "top_style",
+    "top_color",
+    "inner_color",
+    "pants_style",
+    "pants_color",
+    "shoe_color",
+)
+
+
 class AgentAvatar(StrictInput):
     color: Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{3,8}$")]
     glasses: bool | None = None
     hair_style: HairStyle | None = None
+    gender: Gender | None = None
+    skin_tone: HexColor | None = None
+    hair_color: HexColor | None = None
+    face: FaceStyle | None = None
+    top_style: TopStyle | None = None
+    top_color: HexColor | None = None
+    inner_color: HexColor | None = None
+    pants_style: PantsStyle | None = None
+    pants_color: HexColor | None = None
+    shoe_color: HexColor | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_unset_look(self, handler):
+        data = handler(self)
+        for key in _LOOK_KEYS:
+            camel = to_camel(key)
+            for k in (key, camel):
+                if k in data and data[k] is None:
+                    del data[k]
+        return data
 
 
 RoleType = Literal["CTO", "DEV_BACKEND", "DEV_FRONTEND", "QA", "CUSTOM"]
