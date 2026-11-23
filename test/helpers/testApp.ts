@@ -52,7 +52,8 @@ export async function startTestApp(options: { seed?: boolean } = {}): Promise<Te
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       db.close();
-      await rm(dir, { recursive: true, force: true });
+      // En Windows libSQL puede tardar en soltar el archivo: reintentos y, si no, se deja a la limpieza del SO.
+      await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }).catch(() => {});
     },
   };
 }
