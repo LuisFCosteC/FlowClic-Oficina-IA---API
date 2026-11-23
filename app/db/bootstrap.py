@@ -26,11 +26,16 @@ def open_database_from_vault(vault: Vault, driver: str = "libsql") -> Database |
     return connect_database(url, token, "sqlite" if driver == "sqlite" else "libsql")
 
 
+def load_vault(settings: Settings) -> Vault:
+    """Abre la bóveda e importa TURSO_* del .env si todavía están ahí (PLAN §16.4)."""
+    vault = build_vault(settings)
+    import_env_secrets(Path(".env"), vault, settings.turso_database_url, settings.turso_auth_token)
+    return vault
+
+
 def open_configured_database(settings: Settings) -> tuple[Database, Vault] | None:
     """Abre la BD configurada en la bóveda. None si no hay conexión guardada (modo SETUP)."""
-    vault = build_vault(settings)
-    # Si el .env aun trae TURSO_*, se importan a la boveda y se borran del .env (PLAN 16.4).
-    import_env_secrets(Path(".env"), vault, settings.turso_database_url, settings.turso_auth_token)
+    vault = load_vault(settings)
     db = open_database_from_vault(vault, settings.db_driver)
     if db is None:
         vault.close()

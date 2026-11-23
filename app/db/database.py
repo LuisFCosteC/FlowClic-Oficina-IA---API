@@ -179,6 +179,17 @@ def get_db() -> Database:
     return db
 
 
+def try_get_db() -> Database | None:
+    """Conexión activa o None (modo SETUP: aún no hay BD configurada)."""
+    return _current
+
+
+def clear_db() -> None:
+    global _current
+    with _holder_lock:
+        _current = None
+
+
 def swap_db(new: Database, close_old_after: float = 5.0) -> None:
     """Cambia la conexión activa en caliente; la anterior se cierra tras unos segundos."""
     global _current

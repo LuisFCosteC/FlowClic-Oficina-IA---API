@@ -16,10 +16,14 @@ if TYPE_CHECKING:
 @pytest.fixture(autouse=True)
 def _hermetic_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Cada test corre en una carpeta temporal: nunca lee ni modifica el .env real ni data/."""
+    from app.db.database import clear_db
+
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
+    clear_db()
     yield
     get_settings.cache_clear()
+    clear_db()
 
 
 @pytest.fixture

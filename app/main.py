@@ -9,39 +9,65 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.config import Settings, get_settings
-from app.db.database import Database, set_db
+from app.db.database import Database, clear_db, set_db, try_get_db
 from app.errors import register_error_handlers
-from app.routers import health
+from app.middleware import SetupModeMiddleware
+from app.routers import health, setup
+from app.security.setup_gate import SetupGate
+from app.security.vault import Vault
+from app.services.setup_service import has_admin
 
 
-def create_app(settings: Settings | None = None, db: Database | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    db: Database | None = None,
+    vault: Vault | None = None,
+) -> FastAPI:
     """Crea la aplicación (sin arrancar servidor; reutilizable en tests).
 
     - `settings`: por defecto, el entorno real (`get_settings()`).
-    - `db`: conexión ya abierta (tests). Si no se da, se abre desde la bóveda al arrancar.
+    - `db`: conexión ya abierta (tests). Si se da, no se usa la bóveda ni el modo SETUP.
+    - `vault`: bóveda ya abierta (tests del asistente de setup).
+    Sin `db`, al arrancar se abre la bóveda y se conecta con la BD guardada en ella; si no hay
+    ninguna, la API arranca en **modo SETUP** y muestra un código de un solo uso en la consola.
     """
     cfg = settings or get_settings()
+    gate = SetupGate()
     if db is not None:
         set_db(db)
 
     @asynccontextmanager
-    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        vault = None
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        own_vault = False
+        active_vault = vault
+        opened_db = False
         if db is None:
-            from app.db.bootstrap import open_configured_database
-            from app.security.vault import VaultError
+            if active_vault is None:
+                from app.db.bootstrap import load_vault
+                from app.security.vault import VaultError
 
-            try:
-                opened = open_configured_database(cfg)
-            except VaultError as exc:
-                print(f"No se pudo abrir la bóveda: {exc}", file=sys.stderr)
-                raise SystemExit(1) from None
+                try:
+                    active_vault = load_vault(cfg)
+                    own_vault = True
+                except VaultError as exc:
+                    print(f"No se pudo abrir la bóveda: {exc}", file=sys.stderr)
+                    raise SystemExit(1) from None
+            from app.db.bootstrap import open_database_from_vault
+
+            opened = open_database_from_vault(active_vault, cfg.db_driver)
             if opened is not None:
-                opened_db, vault = opened
-                set_db(opened_db)
+                set_db(opened)
+                opened_db = True
+            else:
+                clear_db()
+            if not has_admin(try_get_db()):
+                gate.issue()  # modo SETUP: el código solo se imprime en la consola
+        app.state.vault = active_vault
         yield
-        if vault is not None:
-            vault.close()
+        if opened_db and (current := try_get_db()) is not None:
+            current.close()
+        if own_vault and active_vault is not None:
+            active_vault.close()
 
     app = FastAPI(
         title="FlowClic Oficina IA - API",
@@ -53,9 +79,12 @@ def create_app(settings: Settings | None = None, db: Database | None = None) -> 
         lifespan=lifespan,
     )
     app.state.settings = cfg
+    app.state.vault = vault
+    app.state.setup_gate = gate
     register_error_handlers(app)
 
-    app.add_middleware(
+    app.add_middleware(SetupModeMiddleware)
+    app.add_middleware(  # el último en añadirse es el más externo: CORS envuelve al resto
         CORSMiddleware,
         allow_origins=[cfg.cors_origin],
         allow_credentials=True,
@@ -63,6 +92,7 @@ def create_app(settings: Settings | None = None, db: Database | None = None) -> 
         allow_headers=["Content-Type"],
     )
     app.include_router(health.router)
+    app.include_router(setup.router)
     return app
 
 
