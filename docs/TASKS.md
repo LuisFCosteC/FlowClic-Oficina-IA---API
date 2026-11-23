@@ -646,6 +646,17 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Probar: Ir a Administración → pestaña "Usuarios"; crear un usuario nuevo con contraseña >= 12 caracteres; intentar degradar o desactivar al único administrador y comprobar el mensaje de rechazo 409; cambiar el rol a un operador; verificar el tooltip de revocar sesiones.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 465ms). Commit `d5a95e6` en `dev` del FRONT.
 
+- **ADM09 (Dev Junior, 2026-11-23, EN QA)** — Conexión BD, prueba en caliente y backup manual (A05 en FRONT):
+  - Habilitada pestaña **"Conexión BD"** (`db`) en `AdminView.tsx` y creado componente `DbConnectionPanel.tsx`.
+  - Panel completo de estado consumiendo `GET /api/admin/db`: modo (local/remoto), host anonimizado, estado de conexión, versión de esquema migrado, presencia de token y fecha del último backup.
+  - Botón **"Hacer backup ahora"** (`POST /api/admin/backup`) que genera el respaldo físico y muestra en banner verde la carpeta creada y las tablas respaldadas con su recuento de registros.
+  - Formulario de conexión (`url` y `authToken` protegida tipo password, nunca persistida en cliente):
+    - Botón **"Probar conexión"** (`POST /api/admin/db/test`) que valida el enlace sin guardar ni migrar y muestra el resultado en vivo.
+    - Botón **"Guardar y cambiar BD"** (`PUT /api/admin/db`) con modal de confirmación en UI (sin `window.confirm`) que avisa del cambio en caliente y muestra el error 403 `FORBIDDEN` si `ADMIN_ALLOW_DB_CHANGE` está deshabilitado en el servidor.
+  - Completadas las 9 pestañas de Administración (`workspaces`, `connections`, `agents`, `project`, `rules`, `limits`, `users`, `audit`, `db`) todas con `enabled: true` y pestaña activa por defecto en `agents`.
+  - Probar: Ir a Administración → pestaña "Conexión BD"; verificar las métricas del estado actual; pulsar "Hacer backup ahora" y comprobar el banner verde con la ruta del backup; ingresar una URL como `file:local.db` y pulsar "Probar conexión"; intentar guardar y comprobar el modal de advertencia y la respuesta de la API.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 481ms). Commit `cc3c41b` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
