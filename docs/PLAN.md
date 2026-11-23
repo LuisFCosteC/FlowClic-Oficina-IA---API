@@ -107,7 +107,7 @@ FlowClic Oficina IA - API/
 | Auditoría de dependencias | `pip-audit -r requirements.txt` |
 | Backup / restaurar | `python -m app.db.backup` · `python -m app.db.restore <ruta>` |
 
-### 0.7 Documentación de la API (Swagger)
+### 0.7 Documentación de la API (Swagger) (⚠ actualizado: se sirve en `/api/docs` y exige sesión desde S09; ver TASKS "RESPUESTAS (h)", tarea P03)
 - **Swagger UI:** `http://localhost:4000/docs` · **ReDoc:** `http://localhost:4000/redoc` · **Esquema:** `http://localhost:4000/openapi.json`.
 - Cada router lleva `tags` (Agentes, Tickets, Aprobaciones, Memoria, Tiempo real, Auth, Administración), `summary`, la descripción de errores posibles (`responses={401:…, 403:…, 409:…}`) y ejemplos en los modelos Pydantic.
 - La autenticación por cookie se declara como esquema de seguridad `APIKeyCookie(name='fc_session')`. Así se puede hacer login desde Swagger (`POST /api/auth/login`) y probar el resto de endpoints con esa sesión.

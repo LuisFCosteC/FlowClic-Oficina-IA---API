@@ -370,3 +370,25 @@ CREATE INDEX ix_agent_messages_agent ON agent_messages(agent_id, created_at);
 ## TRASPASO
 _(Cada sesión que se detiene escribe aquí: tareas EN CURSO y su estado exacto, archivos a medias, comandos para probar, dudas abiertas.)_
 - **G01** — Corrección ÚNICA de `001_init.sql` permitida por PLAN §19: `tickets.status` pasa a PENDING·IN_PROGRESS·IN_QA·IN_REVIEW·DONE·RETURNED (defecto PENDING) y `approvals.gate` INTEGER NOT NULL CHECK (1..4); el índice único pasa a ser por (ticket_id, gate) entre PENDING (decisión mía, ver pregunta). Nueva `migrations/005_agent_profiles.sql` con role_type (CHECK), functions, rules, restrictions, permissions, model, limits y consecutive_failures (con valores por defecto válidos). Semilla (demo) adaptada al flujo nuevo y cambiada de `INSERT OR IGNORE` a `ON CONFLICT DO NOTHING`: el primero ignora EN SILENCIO las violaciones de CHECK (así los tickets antiguos "desaparecían" sin error y luego fallaba la FK); libSQL sí aplica las claves foráneas. Modelos Pydantic: TicketStatus nuevo y `gate` en Approval/ApprovalCreate. Tests: tests/test_schema.py (estado antiguo → CHECK; gate 0/5/-1 y gate ausente → falla; 6 estados y 4 compuertas válidos; defecto PENDING; columnas de la 005 con defaults; role_type y contador validados) y ajustes en test_migrate/test_seed. PREGUNTA PARA ARQUITECTO (no bloquea): ¿un ticket puede tener a la vez compuertas PENDING de distinto número? Yo lo permito (índice único por ticket+compuerta). Probar: `pytest tests/test_schema.py`.
+
+
+---
+
+# RESPUESTAS DEL ARQUITECTO (2026-11-22, h)
+
+**Preguntas del Senior:**
+1. *¿`GET /api/setup/status` sigue en 200 tras cerrarse el asistente?* **Sí, 200, pero solo con `{"setupRequired": false}`**: sin `hasDatabase` ni `hasAdmin`, y sin exigir localhost. El front lo necesita al cargar para decidir si muestra el asistente. El resto de `/api/setup/*` → 404 una vez cerrado.
+2. *¿Un ticket puede tener a la vez compuertas pendientes de distinto número?* **Sí.** Como máximo una PENDING por **(ticket, gate)**: índice único `(ticket_id, gate) WHERE status='PENDING'`. El ticket no puede pasar a DONE mientras tenga **cualquier** compuerta PENDING (`GATE_PENDING`).
+
+**Desviaciones del Senior aceptadas:** G01 antes que T30; la semilla con `ON CONFLICT DO NOTHING` en lugar de `INSERT OR IGNORE` (mejor: no oculta violaciones de CHECK).
+
+**QS0 (línea base de seguridad):** aceptada. Hay dos instancias reales; se corrigen así:
+- **#10 (CVSS 5.3), se amplía S01:** `/api/health` sin sesión responde **solo** `{"ok": true}` (sin `version` ni `db`); uvicorn se arranca con `--no-server-header` (README y cualquier script de arranque) y no se envía ninguna cabecera que revele el software o su versión. Criterio añadido a S01: `curl -i` no muestra `server:` ni la versión.
+- **#16 (CVSS 5.3), nueva tarea P03:** la documentación se mueve a **`/api/docs`, `/api/redoc` y `/api/openapi.json`** (así recibe la cookie `fc_session`, que tiene `Path=/api`). Cuando exista S09, exigen **sesión ADMIN u OPERATOR**; hasta entonces solo se sirven a `127.0.0.1` y con `DOCS_ENABLED=true`. `/docs`, `/redoc` y `/openapi.json` en la raíz → 404. Para usar Swagger: iniciar sesión en el front y abrir `/api/docs`. Esto **sustituye** a PLAN §0.7, que permitía ver el esquema sin sesión.
+- Ajuste de clasificación: **#4 (IDOR)** pasa de N/A a **PENDIENTE DE IMPLEMENTAR**: aplica en cuanto existan `me/sessions/{id}` y las credenciales por agente (S06, C05).
+
+| ID | Descripción | Responsable | Estado | Criterio de aceptación |
+|---|---|---|---|---|
+| P03 | Documentación de la API bajo `/api/docs` (ver arriba): rutas movidas, `/docs` en la raíz → 404, acceso solo local hasta S09 y con sesión ADMIN/OPERATOR desde S09; `DOCS_ENABLED=false` → 404 también en `/api/docs`. | DEV | PENDIENTE | Sin sesión (después de S09) `/api/docs` y `/api/openapi.json` → 401; con OPERATOR → 200; `/docs` → 404. |
+
+**Orden para Junior A:** terminar lo de "AMPLIACIÓN (g)" (V3D02 → H01 → H02 → V3D03–V3D06) **corrigiendo antes C04** (DEVUELTA) y añadiendo **P03** y la ampliación de **S01** en cuanto toque la seguridad.
