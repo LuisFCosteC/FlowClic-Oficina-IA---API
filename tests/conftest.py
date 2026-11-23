@@ -3,7 +3,17 @@ from pathlib import Path
 
 import pytest
 
+from app.config import get_settings
 from app.db.database import Database, connect_database
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Cada test corre en una carpeta temporal: nunca lee ni modifica el .env real ni data/."""
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture

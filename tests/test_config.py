@@ -14,7 +14,6 @@ KEY = base64.b64encode(b"\x01" * 32).decode()
 
 
 def make(**kw: object) -> Settings:
-    kw.setdefault("turso_database_url", "file:x.db")
     return Settings(_env_file=None, **kw)  # type: ignore[arg-type]
 
 
@@ -27,16 +26,17 @@ def test_valores_validos_exportan_objeto_tipado() -> None:
     assert s.docs_active is True
 
 
-def test_sin_url_de_bd_falla() -> None:
-    with pytest.raises(ValidationError):
-        Settings(_env_file=None)  # type: ignore[call-arg]
+def test_el_entorno_ya_no_exige_url_de_bd() -> None:
+    # La URL y el token viven en la bóveda cifrada (PLAN §16), no en el .env.
+    assert Settings(_env_file=None).turso_database_url is None  # type: ignore[call-arg]
 
 
-def test_sin_url_el_proceso_termina_con_mensaje_claro_y_codigo_distinto_de_cero(
+def test_entorno_invalido_termina_con_mensaje_claro_y_codigo_distinto_de_cero(
     tmp_path: Path,
 ) -> None:
-    env = {k: v for k, v in os.environ.items() if not k.upper().startswith("TURSO_")}
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("TURSO_", "APP_"))}
     env["PYTHONPATH"] = str(ROOT)
+    env["PORT"] = "70000"
     res = subprocess.run(  # noqa: S603
         [sys.executable, "-c", "from app.config import get_settings; get_settings()"],
         cwd=tmp_path,  # carpeta sin .env
@@ -46,8 +46,7 @@ def test_sin_url_el_proceso_termina_con_mensaje_claro_y_codigo_distinto_de_cero(
         check=False,
     )
     assert res.returncode != 0
-    assert "TURSO_DATABASE_URL" in res.stderr
-    assert "falta la variable" in res.stderr
+    assert "PORT" in res.stderr
     assert "Traceback" not in res.stderr
 
 

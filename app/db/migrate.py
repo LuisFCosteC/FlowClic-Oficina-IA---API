@@ -71,12 +71,21 @@ def schema_version(db: Database) -> int:
 
 def main() -> int:
     from app.config import get_settings
-    from app.db.database import connect_database
+    from app.db.bootstrap import open_configured_database
+    from app.security.vault import VaultError
 
-    settings = get_settings()
-    db = connect_database(
-        settings.turso_database_url, settings.turso_auth_token, settings.db_driver
-    )
+    try:
+        opened = open_configured_database(get_settings())
+    except VaultError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    if opened is None:
+        print(
+            "No hay conexión de BD configurada. Arranca la API (modo SETUP) para configurarla.",
+            file=sys.stderr,
+        )
+        return 1
+    db, vault = opened
     try:
         result = migrate(db)
     except MigrationError as exc:
@@ -84,6 +93,7 @@ def main() -> int:
         return 1
     finally:
         db.close()
+        vault.close()
     if result.applied:
         for name in result.applied:
             print(f"Aplicada: {name}")

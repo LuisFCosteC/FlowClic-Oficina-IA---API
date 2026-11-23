@@ -24,9 +24,11 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 4000
 
-    turso_database_url: str
+    # Legado: solo se lee para importarlos a la bóveda cifrada y borrarlos del .env (C03).
+    turso_database_url: str | None = None
     turso_auth_token: str | None = None
     db_driver: Literal["libsql", "sqlite"] = "libsql"
+    vault_path: str = "data/vault.db"
 
     cors_origin: str = "http://localhost:3000"
     api_public_origin: str = "http://localhost:4000"

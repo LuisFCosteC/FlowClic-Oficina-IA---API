@@ -11,3 +11,4 @@ backups/
 *.log
 coverage/
 node_modules/
+data/
