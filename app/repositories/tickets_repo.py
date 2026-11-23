@@ -1,4 +1,4 @@
-"""Repositorio de tickets (lectura; las escrituras llegan con G05)."""
+"""Repositorio de tickets: lectura, alta y cambio de estado (G05 parcial)."""
 
 from app.db.database import Database, Row
 from app.domain.schemas import Ticket
@@ -39,3 +39,66 @@ def list_tickets(db: Database) -> list[Ticket]:
 def get_ticket(db: Database, ticket_id: str) -> Ticket | None:
     row = db.fetch_one("SELECT * FROM tickets WHERE id = ?", (ticket_id,))
     return row_to_ticket(row) if row else None
+
+
+def insert_ticket(db: Database, t: Ticket) -> None:
+    db.execute(
+        "INSERT INTO tickets (id, title, description, status, priority, assigned_agent_id,"
+        " project, model_tier, estimated_cost_usd, position, created_at, updated_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            t.id,
+            t.title,
+            t.description,
+            t.status,
+            t.priority,
+            t.assigned_agent_id,
+            t.project,
+            t.model_tier,
+            t.estimated_cost_usd,
+            t.position,
+            t.created_at,
+            t.updated_at,
+        ),
+    )
+
+
+def set_status(db: Database, ticket_id: str, status: str, now: str) -> None:
+    db.execute(
+        "UPDATE tickets SET status = ?, updated_at = ? WHERE id = ?", (status, now, ticket_id)
+    )
+
+
+def count_active_for_agent(db: Database, agent_id: str, exclude_ticket: str) -> int:
+    row = db.fetch_one(
+        "SELECT COUNT(*) AS n FROM tickets WHERE assigned_agent_id = ? AND id <> ?"
+        " AND status IN ('IN_PROGRESS','IN_QA','IN_REVIEW','RETURNED')",
+        (agent_id, exclude_ticket),
+    )
+    return int(row["n"]) if row else 0
+
+
+def count_pending_gates(db: Database, ticket_id: str) -> int:
+    row = db.fetch_one(
+        "SELECT COUNT(*) AS n FROM approvals WHERE ticket_id = ? AND status = 'PENDING'",
+        (ticket_id,),
+    )
+    return int(row["n"]) if row else 0
+
+
+def insert_event(
+    db: Database,
+    *,
+    event_id: str,
+    ticket_id: str,
+    type_: str,
+    from_value: str | None,
+    to_value: str | None,
+    payload: str,
+    now: str,
+) -> None:
+    db.execute(
+        "INSERT INTO ticket_events (id, ticket_id, type, from_value, to_value, actor, payload,"
+        " created_at) VALUES (?, ?, ?, ?, ?, 'human', ?, ?)",
+        (event_id, ticket_id, type_, from_value, to_value, payload, now),
+    )

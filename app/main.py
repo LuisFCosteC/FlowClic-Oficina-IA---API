@@ -24,6 +24,7 @@ from app.routers import (
     messages,
     setup,
     snapshot,
+    tickets,
 )
 from app.security.setup_gate import SetupGate
 from app.security.vault import Vault
@@ -116,6 +117,7 @@ def create_app(
     app.include_router(setup.router)
     app.include_router(agent_templates.router)
     app.include_router(agents.router)
+    app.include_router(tickets.router)
     app.include_router(admin_credentials.router)
     app.include_router(snapshot.router)
     app.include_router(events.router)

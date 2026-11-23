@@ -194,6 +194,13 @@ class TicketStatusBody(StrictInput):
     status: TicketStatus
 
 
+class TicketTransitionBody(StrictInput):
+    """`POST /api/tickets/{id}/transition` (PLAN §19.4). `actingAgentId` llegará con S09."""
+
+    to: TicketStatus
+    note: Annotated[str, Field(max_length=1000)] | None = None
+
+
 class TicketAssignBody(StrictInput):
     agent_id: Ref | None
 
