@@ -41,7 +41,7 @@ Cada tarea de DEV pasa a `EN QA`; QA la verifica contra su criterio y la marca `
 
 | ID | Descripción | Responsable | Estado | Criterio de aceptación |
 |---|---|---|---|---|
-| T30 | `repositories/agents.repo.ts`: list (excluye archivados salvo flag), get, insert, update, setStatus, archive; mapea snake_case ⇄ camelCase y `avatar` JSON. | DEV | PENDIENTE | Tests de repo en verde. |
+| T30 | `repositories/agents.repo.ts`: list (excluye archivados salvo flag), get, insert, update, setStatus, archive; mapea snake_case ⇄ camelCase y `avatar` JSON. | DEV | EN QA | Tests de repo en verde. |
 | T31 | `services/agents.service.ts` + rutas `GET/POST/PATCH/DELETE /api/agents` y `GET /api/agents/:id`. Nombre único entre activos (409). DELETE archiva; 409 si tiene tickets no DONE o aprobaciones PENDING. | DEV | PENDIENTE | Crear agente "Howard" desde curl lo devuelve en `GET /api/agents` sin tocar código; duplicar nombre → 409; borrar agente con ticket abierto → 409. |
 | T32 | `PATCH /api/agents/:id/status`: cambio manual a cualquiera de los 5 estados; IDLE pone `currentTask=null`. Emite `agent.updated`. | DEV | PENDIENTE | Los 5 estados aceptados; `"FOO"` → 400; evento emitido (test con bus). |
 | T33 | QA: probar CRUD y estados de agentes con curl/Postman; casos de error (400/404/409). | QA | PENDIENTE | Matriz de casos en QA_REPORT con resultado. |
@@ -119,3 +119,4 @@ Después de T80: el Arquitecto revisa el código, este archivo y `QA_REPORT.md`,
 - **T22** — domain/types.ts (DTOs PLAN §6, uniones de string) y domain/schemas.ts (zod de entrada: agentes, tickets, aprobaciones, memoria, queries; los PATCH son estrictos y rechazan campos desconocidos, p. ej. `status` en PATCH /agents/:id). Probar: `npm run typecheck`; `grep -rn "enum " src` (solo z.enum).
 - **T23** — events/bus.ts: EventBus tipado (`emit`, `on(tipo)`, `onAny`, baja por función devuelta) con DomainEventMap = tabla SSE de PLAN §6; test/bus.test.ts (3 tests). Desviación menor: el script `test` usa glob (`node --test "test/**/*.test.ts"`) porque `node --test test/` falla en Node 24. Probar: `npm test`.
 - **T24** — Infra de tests: test/helpers/testApp.ts (`startTestApp({seed?})`: BD temporal en os.tmpdir(), migra, siembra, app en puerto efímero, `request()` y `close()` que borra la BD temporal); test/health.test.ts. AppDeps ahora incluye `bus` (server.ts lo crea). Probar: `npm test` (5 tests en verde) y comprobar que no aparece local.db.
+- **T30** — repositories/agents.repo.ts (list con flag includeArchived, get, findActiveAgentByName, insert, update parcial, setStatus, archive; snake_case⇄camelCase y avatar JSON) + repositories/util.ts (Executor = Client|Transaction, buildUpdate). Tests: test/agents.repo.test.ts. Probar: `npm test`.
