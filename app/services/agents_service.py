@@ -5,7 +5,7 @@ from typing import Any
 from app.db.database import Database, IntegrityError
 from app.domain.agent_policy import check_profile, generate_system_prompt
 from app.domain.agent_templates import BASE_TEAM, AgentTemplate
-from app.domain.schemas import Agent, AgentAvatar, AgentCreate, AgentUpdate
+from app.domain.schemas import Agent, AgentAvatar, AgentCreate, AgentStatusBody, AgentUpdate
 from app.errors import conflict, not_found, validation_error
 from app.events.bus import EventBus
 from app.repositories import agents_repo as repo
@@ -194,3 +194,31 @@ def archive_agent(db: Database, bus: EventBus | None, agent_id: str) -> None:
     repo.archive_agent(db, agent_id, now_iso())
     if bus is not None:
         bus.emit("agent.archived", {"id": agent_id})
+
+
+def set_agent_status(
+    db: Database, bus: EventBus | None, agent_id: str, body: AgentStatusBody
+) -> Agent:
+    """Cambio MANUAL de estado: cualquiera de los 5 estados.
+
+    - IDLE limpia `current_task`; otro estado conserva la tarea salvo que se envíe una nueva.
+    - Salir de BLOCKED a mano (decisión humana explícita) reinicia el contador de fallos.
+    """
+    agent = get_agent_or_404(db, agent_id)
+    if agent.archived_at is not None:
+        raise conflict("El agente está archivado: restáuralo antes de cambiar su estado")
+    if body.status == "IDLE":
+        task = None
+    elif body.current_task is not None:
+        task = body.current_task
+    else:
+        task = agent.current_task
+    now = now_iso()
+    with db.transaction() as tx:
+        repo.set_status(tx, agent_id, body.status, task, now)
+        if agent.status == "BLOCKED" and body.status != "BLOCKED":
+            repo.set_failures(tx, agent_id, 0, now)
+    updated = get_agent_or_404(db, agent_id)
+    if bus is not None:
+        bus.emit("agent.updated", agent_payload(updated))
+    return updated

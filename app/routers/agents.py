@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Response
 
 from app.db.database import Database, get_db
-from app.domain.schemas import Agent, AgentCreate, AgentUpdate
+from app.domain.schemas import Agent, AgentCreate, AgentStatusBody, AgentUpdate
 from app.errors import ErrorResponse
 from app.events.bus import EventBus, get_bus
 from app.services import agents_service
@@ -72,3 +72,12 @@ def update_agent(agent_id: str, body: AgentUpdate, db: Db, bus: Bus) -> Agent:
 def archive_agent(agent_id: str, db: Db, bus: Bus) -> Response:
     agents_service.archive_agent(db, bus, agent_id)
     return Response(status_code=204)
+
+
+@router.patch(
+    "/{agent_id}/status",
+    summary="Cambio manual de estado (IDLE, WORKING, REVIEW, BLOCKED o SLEEP_QUOTA)",
+    responses={409: {"model": ErrorResponse, "description": "El agente está archivado"}},
+)
+def set_agent_status(agent_id: str, body: AgentStatusBody, db: Db, bus: Bus) -> Agent:
+    return agents_service.set_agent_status(db, bus, agent_id, body)
