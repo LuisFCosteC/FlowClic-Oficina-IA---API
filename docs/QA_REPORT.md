@@ -355,3 +355,64 @@ Tareas FRONT:
 - Decisión del Arquitecto: T02 (criterio obsoleto frente a PLAN §16).
 - Pendiente de aprobación del Dev Senior y de prueba manual: K01, F03a.
 - No hay evidencia del QA Junior en este informe para estas tareas; las pruebas aquí son reproducidas por el QA Senior.
+
+---
+
+## Ronda 5 — QA Senior — 2026-11-23
+
+**Entorno:** exportación limpia de `dev` (commit `91458ec`) en el scratchpad, `.venv` con Python 3.13, BD `file:` temporal y bóveda temporal con claves generadas para la prueba. API en `127.0.0.1:4100`; FRONT (`dev` `b8689c2`, exportación limpia) en `127.0.0.1:3100`. No se leyó `.env` ni `data/vault.db` y no se usó Turso. El working tree del repo (cambios sin commitear de otra sesión) no se probó ni se commiteó. Arnés: `scratchpad/qa_live.py` y `scratchpad/qa_setup.py`.
+
+**Veredicto del QA Junior (Ronda 4):** no aparece en el repo (ni en QA_REPORT, ni en TASKS, ni en el historial de git). Se validan los criterios directamente, como pide el CEO.
+
+**Comprobaciones generales de la API (`dev` 91458ec):**
+- `pytest`: 100 % pasa (exit 0).
+- `ruff check .`: All checks passed (exit 0). `ruff format --check .`: 90 files already formatted (exit 0).
+- `mypy app`: Success: no issues found in 52 source files (exit 0).
+- `pip-audit -r requirements.txt`: No known vulnerabilities found (exit 0).
+
+**Comprobaciones generales del FRONT (`dev` b8689c2, exportación limpia):**
+- `npm run lint` (tsc): exit 0.
+- `npm run build`: exit 0 (aviso de chunks > 500 kB, no bloqueante).
+
+### Tareas de API
+
+| ID | Fecha | Qué probé | Resultado | Error exacto y pasos / evidencia |
+|---|---|---|---|---|
+| T02 | 2026-11-23 | Criterio actualizado por el CEO: sin `APP_MASTER_KEY` válida en producción → fin con mensaje y código ≠ 0; sin BD → modo SETUP. `tests/test_config.py` y `tests/test_setup.py` (verdes). En vivo: `get_settings()` con `NODE_ENV=production`. | **PASA** | Prod sin `APP_MASTER_KEY` → exit 1, "obligatorias en producción: APP_MASTER_KEY". Clave de 3 B → exit 1. Prod sin `SESSION_SECRET` → exit 1. Prod con claves válidas → exit 0. Dev sin `TURSO_*` → exit 0. Uvicorn sin BD → `/api/setup/status` = `{"setupRequired":true,"hasDatabase":false,"hasAdmin":false}`. |
+| T22 | 2026-11-23 | `mypy app`; búsqueda de `enum` en `app/` (criterio: sin `enum`); `tests/test_schemas.py`. | **PASA** | 0 ficheros con `enum`. |
+| T23 | 2026-11-23 | `tests/test_bus.py`. | **PASA** | Suite verde. |
+| T24 | 2026-11-23 | `tests/test_infra.py` y `test_health.py`; comprobación de que no aparecen `local.db` ni `data/` tras pytest. | **PASA** | Suite verde; repo sin `local.db`. |
+| T30 | 2026-11-23 | `tests/test_agents_repo.py`. | **PASA** | Suite verde. |
+| T31 | 2026-11-23 | En vivo: crear "Howard", listarlo, duplicado, `systemPrompt` del cliente, borrar con ticket abierto (ticket insertado en la BD temporal). | **PASA** | POST → 201, aparece en GET. Duplicado → 409 `CONFLICT`. `systemPrompt` → 400. Borrar con ticket abierto → 409 "El agente tiene tickets sin terminar". |
+| T32 | 2026-11-23 | En vivo: los 5 estados, `"FOO"`, IDLE con `currentTask`. `tests/test_agents_status_api.py`. El evento `agent.updated` se comprobó por SSE (ver T60). | **PASA** | Los 5 estados → 200. `FOO` → 400. IDLE → `currentTask: null`. |
+| C04 | 2026-11-23 | En vivo en modo SETUP (`127.0.0.1:4200`, bóveda vacía, código leído de consola): flujo completo y cabeceras de proxy. Script `scratchpad/qa_setup.py`. | **PASA** | 16/16. Código incorrecto → 403. `X-Forwarded-For`, `Forwarded`, `X-Real-IP` → 403. `Host: evil.example.com` → 403. BD con código bueno → 200 y código nuevo emitido. Código consumido → 403. ADMIN → 201. Tras cerrar: `{"setupRequired":false}` y `/api/setup/database` → 404. Bóveda sin la URL ni la contraseña en claro. Usuario con hash `scrypt$…`. |
+| T60 | 2026-11-23 | En vivo: stream SSE abierto; `PATCH /api/agents/leonard/status` → WORKING. Heartbeat, 2 clientes y limpieza de listeners cubiertos por `tests/test_sse.py` (14 tests). | **PASA** | Evento recibido: `agent.updated`. |
+| T61 | 2026-11-23 | En vivo: `GET /api/snapshot` tras cargar el equipo base. | **PASA** | 200 con `agents`, `tickets`, `approvals`, `serverTime`. Agentes: sheldon, leonard, penny, raj. Sin claves sensibles (hash, secreto, MFA) en ningún nivel del JSON. |
+| G01 | 2026-11-23 | En vivo sobre la BD temporal: insertar `status='AWAITING_APPROVAL'`, `gate=5`, `gate=0`, `gate=1`. `tests/test_schema.py`. | **PASA** | `CHECK constraint failed: status IN (…)`; `CHECK constraint failed: gate BETWEEN 1 AND 4` (gate 5 y 0); `gate=1` se inserta. Nota: en la primera pasada mi comprobación dio falso negativo (`requested_at` NOT NULL tapaba el CHECK); corregido y repetido. |
+| G02 | 2026-11-23 | En vivo: `git.merge_main`, `approvals.create` en DEV, acción inventada, regla propia que intenta quitar las globales. | **PASA** | 422 `GLOBAL_RESTRICTION`; 422; 400; la regla propia se acepta (201) y el `systemPrompt` contiene las 5 globales literales. |
+| G03 | 2026-11-23 | En vivo: `GET /api/agent-templates` y `POST /api/admin/agents/load-base-team` dos veces. `tests/test_agent_templates.py` (parsea `docs/AGENT_PROFILES.md` palabra por palabra) y `test_agent_templates_api.py`. | **PASA** | Plantillas 200. Segunda carga: `created: []`, `skipped: [Sheldon, Leonard, Penny, Raj]`, total de agentes igual antes y después. |
+| G04 | 2026-11-23 | En vivo: 3 fallos seguidos; 2 fallos + éxito + 1 fallo; auditoría. `tests/test_agent_guard.py` (12). | **PASA** | 3 fallos → `BLOCKED`. Con éxito intermedio no bloquea (`WORKING`, fallos=1). Auditoría `agent.auto_blocked`: 1 fila. |
+| H01 | 2026-11-23 | En vivo: orden global, body de 2001 caracteres, `authorType` del cliente, `<script>` como texto, hilo de Sheldon, `status-summary`. `tests/test_messages_api.py`. | **PASA** (pendiente de S09) | GLOBAL → 201 `PENDING`. 2001 → 400. `authorType` → 400. `<script>` se guarda tal cual. El hilo de Sheldon incluye la orden global. `status-summary` → 200. **Pendiente de S09:** VIEWER → 403 en POST. |
+| S01 | 2026-11-23 | En vivo: `curl -i` de health, body de 200 kB en `/api/messages`, `netstat` del puerto 4100. | **PASA** | `/api/health` = `{"ok":true}`; sin cabeceras `server` ni `x-powered-by`; CSP, nosniff, Referrer-Policy y X-Frame-Options presentes. 200 kB → 413 `PAYLOAD_TOO_LARGE` en JSON y no se crea ningún registro. El socket escucha solo en `127.0.0.1:4100`. |
+| S02 | 2026-11-23 | `scripts/setup_env.py` en carpeta temporal, dos ejecuciones; `icacls .env`; `.env.example`. | **PASA** | 1.ª: ".env creado". 2.ª: ".env ya tiene todas las claves: no se modificó nada". SHA256 idéntico. `icacls` → un único permiso (usuario actual). `.env.example`: `APP_MASTER_KEY=` y `SESSION_SECRET=` vacíos. |
+| S04 | 2026-11-23 | En vivo sobre `app.security.password`: hash ≠ clave, dos hashes distintos, verify buena/mala, política corta. | **PASA** | Formato `scrypt$131072$…`; verify buena = True, mala = False; contraseña de 5 caracteres rechazada. |
+| C02 | 2026-11-23 | Bóveda: URL y contraseña no aparecen en los bytes de `vault.db` (BD temporal y setup). Conexión a Turso real: **no probada** (regla de QA: solo `file:`). | **NO VERIFICADO → EN QA** | Sí se cumple: sin URL ni secreto en claro. Falta: que la API se conecte a Turso con los datos de la bóveda. Requiere decisión del CEO para una prueba contra Turso real. |
+| P03 | 2026-11-23 | En vivo: `/api/docs`, `/api/openapi.json`, `/docs`, `/redoc`, `/openapi.json`. `tests/test_docs.py` (22, incluye `DOCS_ENABLED=false`). | **PASA** (pendiente de S09) | `/api/docs` = 200 y `/api/openapi.json` = 200 en local; `/docs`, `/redoc`, `/openapi.json` en raíz = 404. **Pendiente de S09:** sin sesión → 401; OPERATOR → 200. |
+
+### Tareas de FRONT
+
+| ID | Fecha | Qué probé | Resultado | Error exacto y pasos / evidencia |
+|---|---|---|---|---|
+| F05 | 2026-11-23 | `npm run lint` y `npm run build` sobre `dev` b8689c2 (exportación limpia). `package.json`, `src/`, `.env.example`, grep de `genai`/`GEMINI`. | **PASA** | lint 0, build 0. `package.json` sin `@google/genai`, `express`, `@types/express` ni `dotenv`. `src/` sin imports de esos paquetes. `.env.example` solo `VITE_API_URL`. Fuera de lockfiles no hay referencias. **Aviso:** `bun.lock` todavía lista `@google/genai` (2 referencias); el criterio excluye lockfiles, pero conviene regenerarlo. |
+| K01 | 2026-11-23 | Lint y build (pasan). Arrastre con ratón entre columnas en el navegador (`left_click_drag`), tercer intento tras las rondas 2 y 3. | **EN QA** | El arrastre no mueve la tarjeta: "Optimización de índices" sigue en Backlog (contadores 2 y 4). La automatización no dispara el DnD HTML5. **Pendiente:** validación manual del CEO con ratón en las 5 columnas. |
+| F03a | 2026-11-23 | Código en `dev`: menú (5 módulos). Lint y build. Navegador: menú. | **EN QA** | Menú correcto: To-Do & Pipeline, Calendario, Cerebro, Oficina IA 3D, Administración. **Pendiente:** (a) crear agente desde Administración y verlo en otras vistas (no probado); (b) "Conexión BD" real y lista de agentes desde la API: el FRONT de `dev` no llama a la API (`grep` sin resultados) y el tablero muestra datos de ejemplo (13 agentes), así que **T75 parte 1 y parte 2 siguen pendientes**. |
+
+### Hallazgos adicionales (fuera de criterio, para el CEO)
+1. **FRONT, working tree de otra sesión:** cambios sin commitear (`src/types/orbis.ts`, `src/api/`, `src/data/agentTemplates.ts`, `src/types/agentProfile.ts`) hacen fallar `npm run lint` (`avatarBuilder.ts`, `Colmena3DView.tsx`: `AgentStatus` sin `blocked`/`sleep_quota`). En `dev` (HEAD) el lint pasa.
+2. **API, working tree de otra sesión:** cambios sin commitear (`schemas.py`, `errors.py`, `main.py`, `tickets_*`, `ticket_flow.py`, `credentials_*`, migración `003_agent_credentials.sql` y tests asociados). No se probaron ni se commitearon aquí.
+3. **Datos de ejemplo en el FRONT** (ver F03a) siguen visibles en `dev`.
+
+### Resumen de estados (TASKS.md)
+- **HECHO (20):** T02, T22, T23, T24, T30, T31, T32, C04, T60, T61, G01, G02, G03, G04, H01 (pendiente S09), S01, S02, S04, P03 (pendiente S09), F05.
+- **EN QA (3, bloqueadas por evidencia externa, no por defecto de código):** C02 (falta prueba contra Turso real; requiere decisión del CEO), K01 (arrastre con ratón: validación manual del CEO), F03a (flujo de creación y conexión a API; depende de T75).
+- Desviación respecto a la orden "HECHO o DEVUELTA": estas tres no cumplen los criterios por falta de evidencia, no porque el código falle; por eso se quedan en EN QA, con el motivo aquí.
