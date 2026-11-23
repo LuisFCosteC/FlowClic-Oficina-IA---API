@@ -31,7 +31,8 @@ La BD **empieza vacía**: `migrate` solo crea el esquema, sin datos de ejemplo.
 
 ```powershell
 python -m app.db.migrate            # crea/actualiza el esquema (vacío)
-python -m app.db.seed --demo        # OPCIONAL: datos de ejemplo (4 agentes, tickets...). Nunca se cargan por defecto
+python -m app.db.seed --agents      # OPCIONAL: carga el equipo base (Sheldon, Leonard, Penny, Raj). Idempotente
+python -m app.db.seed --demo        # OPCIONAL: equipo base + tickets de ejemplo. Nunca se cargan por defecto
 python -m app.db.reset              # solo bases file: — borra y recrea la BD vacía (con --demo, con ejemplos)
 ```
 
@@ -41,6 +42,7 @@ python -m app.db.reset              # solo bases file: — borra y recrea la BD 
 | Servidor (solo Swagger por ahora) | `uvicorn app.main:app --reload --host 127.0.0.1 --port 4000 --no-proxy-headers --no-server-header` |
 | Crear `.env` con claves aleatorias | `python scripts/setup_env.py` |
 | Migrar | `python -m app.db.migrate` |
+| Equipo base (opcional) | `python -m app.db.seed --agents` |
 | Datos de ejemplo (opcional) | `python -m app.db.seed --demo` |
 | Reiniciar BD local | `python -m app.db.reset` · `python -m app.db.reset --demo` |
 | Tests | `pytest` |

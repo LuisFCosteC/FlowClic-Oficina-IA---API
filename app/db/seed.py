@@ -7,47 +7,11 @@ La semilla NO crea usuarios ni credenciales: el primer ADMIN se crea desde el as
 primer arranque o con `python scripts/admin_create.py` (PLAN §12.1 #13).
 """
 
-import json
 import sys
-from typing import Any
 
 from app.db.database import Database
+from app.services.agents_service import load_base_team
 from app.util import now_iso
-
-AGENTS: list[dict[str, Any]] = [
-    {
-        "id": "sheldon",
-        "name": "Sheldon",
-        "character": "Sheldon Cooper",
-        "role": "CTO",
-        "avatar": {"color": "#F59E0B", "hairStyle": "parted"},
-        "is_cto": 1,
-    },
-    {
-        "id": "leonard",
-        "name": "Leonard",
-        "character": "Leonard Hofstadter",
-        "role": "Senior Full-Stack",
-        "avatar": {"color": "#38BDF8", "glasses": True, "hairStyle": "short"},
-        "is_cto": 0,
-    },
-    {
-        "id": "penny",
-        "name": "Penny",
-        "character": "Penny",
-        "role": "Frontend web/móvil",
-        "avatar": {"color": "#EC4899", "hairStyle": "long"},
-        "is_cto": 0,
-    },
-    {
-        "id": "raj",
-        "name": "Raj",
-        "character": "Rajesh Koothrappali",
-        "role": "QA",
-        "avatar": {"color": "#6366F1", "hairStyle": "short"},
-        "is_cto": 0,
-    },
-]
 
 # Tickets sin agente asignado: así los agentes semilla (IDLE) siguen coherentes con la regla R1.
 TICKETS: list[dict[str, str]] = [
@@ -88,24 +52,9 @@ TICKETS: list[dict[str, str]] = [
 
 def seed(db: Database) -> None:
     """Inserta los datos semilla en una sola transacción. Se puede ejecutar varias veces."""
+    load_base_team(db)  # los 4 agentes, desde las plantillas del CEO (idempotente)
     now = now_iso()
     with db.transaction() as tx:
-        for a in AGENTS:
-            tx.execute(
-                "INSERT INTO agents"
-                " (id, name, character, role, status, avatar, is_cto, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, 'IDLE', ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
-                (
-                    a["id"],
-                    a["name"],
-                    a["character"],
-                    a["role"],
-                    json.dumps(a["avatar"]),
-                    a["is_cto"],
-                    now,
-                    now,
-                ),
-            )
         for i, t in enumerate(TICKETS):
             tx.execute(
                 "INSERT INTO tickets"
@@ -153,11 +102,16 @@ def main(argv: list[str] | None = None) -> int:
     from app.db.bootstrap import open_configured_database
     from app.security.vault import VaultError
 
-    parser = argparse.ArgumentParser(description="Carga datos de demostracion (opcional).")
-    parser.add_argument("--demo", action="store_true", help="carga los datos de ejemplo")
+    parser = argparse.ArgumentParser(description="Datos opcionales (la BD empieza vacia).")
+    parser.add_argument("--agents", action="store_true", help="carga el equipo base (4 agentes)")
+    parser.add_argument(
+        "--demo", action="store_true", help="carga datos de ejemplo (+ equipo base)"
+    )
     args = parser.parse_args(argv)
-    if not args.demo:
-        print("Nada que hacer: la BD empieza vacia. Usa --demo para cargar datos de ejemplo.")
+    if not (args.agents or args.demo):
+        print(
+            "Nada que hacer: la BD empieza vacia. Usa --agents (equipo base) o --demo (ejemplos)."
+        )
         return 0
 
     try:
@@ -170,9 +124,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     db, vault = opened
     try:
-        seed(db)
+        if args.demo:
+            seed(db)
+        else:
+            created, skipped = load_base_team(db)
+            print(f"Equipo base: {len(created)} creados, {len(skipped)} ya existian.")
         n = db.fetch_one("SELECT COUNT(*) AS n FROM agents")
-        print(f"Datos de demostracion cargados. Agentes en la BD: {n['n'] if n else 0}")
+        print(f"Agentes en la BD: {n['n'] if n else 0}")
     finally:
         db.close()
         vault.close()

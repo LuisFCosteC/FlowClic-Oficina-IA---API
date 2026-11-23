@@ -13,6 +13,7 @@ extend-exclude = [".venv"]
 select = ["E", "F", "I", "B", "UP", "S"]
 
 [tool.ruff.lint.per-file-ignores]
+"app/domain/agent_templates.py" = ["E501"]  # texto literal del CEO (AGENT_PROFILES.md)
 "tests/*" = ["S101", "S105", "S106"]
 "scripts/*" = ["S603", "S607"]
 
