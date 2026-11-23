@@ -416,3 +416,5 @@ Tareas FRONT:
 - **HECHO (20):** T02, T22, T23, T24, T30, T31, T32, C04, T60, T61, G01, G02, G03, G04, H01 (pendiente S09), S01, S02, S04, P03 (pendiente S09), F05.
 - **EN QA (3, bloqueadas por evidencia externa, no por defecto de código):** C02 (falta prueba contra Turso real; requiere decisión del CEO), K01 (arrastre con ratón: validación manual del CEO), F03a (flujo de creación y conexión a API; depende de T75).
 - Desviación respecto a la orden "HECHO o DEVUELTA": estas tres no cumplen los criterios por falta de evidencia, no porque el código falle; por eso se quedan en EN QA, con el motivo aquí.
+
+> Nota (QA Senior, 2026-11-23): las pruebas en vivo y de criterio de esta ronda se hicieron sobre `91458ec`. Después se han añadido `cdf8e89` (C05) y `cc53425` (G05 parcial) en `dev`; sobre `5ca7fe0` pytest, ruff check, ruff format (98 ficheros) y mypy (58 ficheros) pasan. Los criterios de G05 y C05 no están evaluados en esta ronda.
