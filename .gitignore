@@ -3,3 +3,5 @@ node_modules/
 local.db*
 *.log
 coverage/
+backups/
+.env.bak
