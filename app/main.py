@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from app.config import Settings, get_settings
 from app.db.database import Database, set_db
+from app.errors import register_error_handlers
 from app.routers import health
 
 
@@ -52,6 +53,7 @@ def create_app(settings: Settings | None = None, db: Database | None = None) -> 
         lifespan=lifespan,
     )
     app.state.settings = cfg
+    register_error_handlers(app)
 
     app.add_middleware(
         CORSMiddleware,
