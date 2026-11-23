@@ -9,12 +9,12 @@ from typing import Any
 from app.db.database import Database
 from app.util import new_id, now_iso
 
-_FORBIDDEN_KEYS = ("password", "token", "secret", "key", "authorization", "cookie", "ciphertext")
+FORBIDDEN_KEYS = ("password", "token", "secret", "key", "authorization", "cookie", "ciphertext")
 
 
 def _clean(meta: dict[str, Any]) -> dict[str, Any]:
     """Defensa en profundidad: descarta cualquier clave que parezca un secreto."""
-    return {k: v for k, v in meta.items() if not any(f in k.lower() for f in _FORBIDDEN_KEYS)}
+    return {k: v for k, v in meta.items() if not any(f in k.lower() for f in FORBIDDEN_KEYS)}
 
 
 def record(

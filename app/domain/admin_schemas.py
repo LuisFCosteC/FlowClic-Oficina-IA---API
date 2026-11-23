@@ -1,6 +1,6 @@
 """DTOs de Administración (PLAN §13): proyecto, límites y reglas."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
@@ -53,3 +53,45 @@ class RuleUpdate(StrictInput):
 
 class RuleOrder(StrictInput):
     ids: Annotated[list[Annotated[str, Field(min_length=1, max_length=64)]], Field(max_length=500)]
+
+
+# ── Auditoría y usuarios (A07) ───────────────────────────────────────────────────────────────
+UserRole = Literal["ADMIN", "OPERATOR", "VIEWER"]
+
+
+class AuditEntry(CamelModel):
+    id: str
+    user_id: str | None
+    action: str
+    target_type: str | None
+    target_id: str | None
+    ip: str | None
+    meta: dict[str, Any]
+    created_at: str
+
+
+class AdminUser(CamelModel):
+    """Vista pública de un usuario: NUNCA incluye hash de contraseña ni secreto MFA."""
+
+    id: str
+    email: str
+    display_name: str
+    role: UserRole
+    mfa_enabled: bool
+    last_login_at: str | None
+    disabled_at: str | None
+    created_at: str
+    updated_at: str
+
+
+class UserCreate(StrictInput):
+    email: Annotated[str, Field(min_length=3, max_length=254)]
+    display_name: Annotated[str, Field(min_length=1, max_length=80)]
+    role: UserRole
+    password: Annotated[str, Field(min_length=1, max_length=256)]
+
+
+class UserUpdate(StrictInput):
+    display_name: Annotated[str, Field(min_length=1, max_length=80)] | None = None
+    role: UserRole | None = None
+    disabled: bool | None = None

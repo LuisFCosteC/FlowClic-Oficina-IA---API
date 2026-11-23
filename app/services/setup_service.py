@@ -16,7 +16,7 @@ log = logging.getLogger("flowclic")
 
 ALLOWED_SCHEMES = ("file:", "libsql://", "https://")
 CONNECT_TIMEOUT = 5.0
-_EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,189}\.[^@\s.]{2,}$")
+EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,189}\.[^@\s.]{2,}$")
 
 
 def validate_url(url: str) -> None:
@@ -81,7 +81,7 @@ def has_admin(db: Database | None) -> bool:
 def create_first_admin(db: Database, email: str, display_name: str, password: str) -> str:
     """Crea el primer ADMIN (debe activar MFA en su primer login). Devuelve su id."""
     email = email.strip().lower()
-    if len(email) > 254 or not _EMAIL.match(email):
+    if len(email) > 254 or not EMAIL_RE.match(email):
         raise validation_error("Email inválido", [{"path": "email", "message": "formato inválido"}])
     try:
         password_hash = hash_password(password)
