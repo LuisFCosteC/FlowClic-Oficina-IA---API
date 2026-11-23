@@ -13,7 +13,7 @@ Cada tarea de DEV pasa a `EN QA`; QA la verifica contra su criterio y la marca `
 |---|---|---|---|---|
 | T00 | (Tras OK del CEO) `git init` en API y FRONT, commit inicial en `main` con el estado actual, crear y usar rama `dev`. | DEV | HECHO | `git branch` muestra `main` y `dev` en ambos; `dev` activa; el commit inicial del FRONT no incluye `node_modules` ni `.env*`. |
 | T01 | Scaffold API: `package.json` (`"type":"module"`, `engines.node >=24`), scripts de PLAN §9, `tsconfig.json` (noEmit, `allowImportingTsExtensions`, `verbatimModuleSyntax`), `.gitignore`, `.env.example`. Instalar solo deps de PLAN §8. | DEV | EN QA | `npm install` sin errores; `npm run typecheck` pasa; `.env` y `local.db*` ignorados por git; no hay deps fuera de la lista. |
-| T02 | `src/config/env.ts`: carga y valida variables con zod (`PORT`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` opcional, `CORS_ORIGIN`, `ORCHESTRATOR` = `noop`). | DEV | PENDIENTE | Sin `TURSO_DATABASE_URL` el proceso termina con mensaje claro y código ≠ 0; con valores válidos exporta objeto tipado. |
+| T02 | `src/config/env.ts`: carga y valida variables con zod (`PORT`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` opcional, `CORS_ORIGIN`, `ORCHESTRATOR` = `noop`). | DEV | EN QA | Sin `TURSO_DATABASE_URL` el proceso termina con mensaje claro y código ≠ 0; con valores válidos exporta objeto tipado. |
 | T03 | QA: verificar arranque limpio del scaffold en una copia nueva (clonar `dev`, `npm install`, `npm run typecheck`). | QA | PENDIENTE | Pasos reproducibles anotados en `QA_REPORT.md`; sin rutas absolutas (`grep -rn "D:\\\\\|C:\\\\" src seeds migrations` vacío). |
 
 ## Bloque 1 — Base de datos
@@ -108,3 +108,4 @@ Después de T80: el Arquitecto revisa el código, este archivo y `QA_REPORT.md`,
 ## Notas DEV
 
 - **T01** — Scaffold API: package.json (scripts PLAN §9), tsconfig, .gitignore, .env.example, deps solo de PLAN §8 (express@4, @types/express@4). Archivos: package.json, package-lock.json, tsconfig.json, .gitignore, .env.example, src/server.ts (placeholder). Probar: `npm install && npm run typecheck`.
+- **T02** — env.ts con zod; falla con mensaje claro y exit 1 si falta TURSO_DATABASE_URL. Archivo: src/config/env.ts (exporta `env` y `parseEnv`). Probar: `node src/config/env.ts` sin variables → exit 1; `TURSO_DATABASE_URL=file:local.db node src/config/env.ts` → ok.
