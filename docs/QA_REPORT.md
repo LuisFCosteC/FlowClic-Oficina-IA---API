@@ -418,3 +418,73 @@ Tareas FRONT:
 - Desviación respecto a la orden "HECHO o DEVUELTA": estas tres no cumplen los criterios por falta de evidencia, no porque el código falle; por eso se quedan en EN QA, con el motivo aquí.
 
 > Nota (QA Senior, 2026-11-23): las pruebas en vivo y de criterio de esta ronda se hicieron sobre `91458ec`. Después se han añadido `cdf8e89` (C05) y `cc53425` (G05 parcial) en `dev`; sobre `5ca7fe0` pytest, ruff check, ruff format (98 ficheros) y mypy (58 ficheros) pasan. Los criterios de G05 y C05 no están evaluados en esta ronda.
+
+---
+
+## Ronda 6 — QA Senior — 2026-11-23
+
+**Entorno:** API `dev` `eded531` (HEAD tras pull; incluye C05 y G05 parcial) arrancada **desde el repo** con su `.venv` y su `.env` para conectarse a **Turso real** (autorizado por el CEO para QM0). No se leyó `.env` ni la bóveda directamente. Puerto 4100; CORS para `127.0.0.1:3100`. FRONT `dev` `540854f` (HEAD) exportado limpio, con `VITE_API_URL=http://127.0.0.1:4100`, en `127.0.0.1:3100`. El working tree del FRONT tiene WIP sin commitear (G07: `src/types/agentProfile.ts`, `CreateAgentProfileModal.tsx`, `initialData.ts`), que **no** se valida.
+
+**Estado inicial de la BD real:** 0 agentes, 0 tickets, 0 aprobaciones. `setupRequired: true` (`hasDatabase: true`, `hasAdmin: false`). Se encontró vacía, así que no hubo que borrar nada. (El Dev Senior había anotado que tenía el equipo base cargado; ya no es así.)
+
+**Comprobaciones generales:** `dev` `eded531`: pytest exit 0; ruff check y format OK; mypy 58 ficheros OK. FRONT `540854f`: `npm run lint` exit 0; `npm run build` exit 0.
+
+**Aclaraciones sobre la orden:**
+- No existe la marca literal "Revisión Dev Senior: OK". Tomo como revisadas por el Dev Senior las tareas de las notas de `eded531`: F05, F03a, K01 (aprobadas) y el bloque T70–T75 + T73 + F03a-conexión + F07.
+- **J01–J04, CAL01, MOD01, TSK01 y WS01 no existen** en TASKS, QA_REPORT, historial de git ni código. No se validan.
+
+### Tareas de API
+
+| ID | Fecha | Qué probé | Resultado | Error exacto / evidencia |
+|---|---|---|---|---|
+| C05 | 2026-11-23 | En vivo sobre API real con el agente QA R6: lista de conexiones, duplicado, campo extra, nueva conexión del mismo proveedor, rotar, revocar, búsqueda de la clave en todas las respuestas. Script `scratchpad/qa_c05_live.py`. | **PASA** (pendiente de S09) | 10/10. Lista: QA-R6-A/0001, QA-R6-B/0002. Duplicado activo → 409. Campo extra → 400. Nueva conexión → 201, last4 0003. Rotar → 200, last4 0004 y `rotatedAt` informado. Revocar → 204, idempotente. Ninguna respuesta contiene la clave de prueba. Pendiente de S09: ADMIN + MFA y `created_by` real. |
+| G05 (parcial) | 2026-11-23 | En vivo: un ticket recorre el grafo; en cada estado se prueban todos los destinos inválidos; se avanza por uno válido; efecto en agente; mismo estado; estado desconocido. Script `scratchpad/qa_g05_live.py`. | **PASA** (pendiente de S09) | 19/19 transiciones inválidas → 409 `INVALID_TRANSITION`. Recorrido PENDING → IN_PROGRESS → IN_QA → IN_REVIEW → DONE con 200. IN_PROGRESS → agente WORKING. Mismo estado → 200. `FOO` → 400. Pendiente de S09: `actingAgentId`, 403 y la matriz actor × origen × destino (dependen de roles). Ticket de prueba `749aced6-…` queda en DONE. |
+| J01–J04 | 2026-11-23 | Búsqueda en docs, TASKS, QA_REPORT, historial de git y código. | **NO ENCONTRADA** | No hay ninguna definición ni commit con esos IDs. Hace falta la definición para validarlas. |
+
+### Tareas de FRONT
+
+| ID | Fecha | Qué probé | Resultado | Error exacto / evidencia |
+|---|---|---|---|---|
+| T70 | 2026-11-23 | `grep localhost:4000 src` (vacío); `config.ts`; FRONT en vivo con `VITE_API_URL` apuntando a la API real. | **PASA** | `src/api/config.ts` exige `VITE_API_URL` con mensaje explícito. El FRONT carga la API real (4100) sin usar ninguna URL fija. |
+| T71 | 2026-11-23 | `npm run lint` sobre HEAD. | **PASA** | exit 0. |
+| T72 | 2026-11-23 | Revisé `mappers.ts`. No ejecuté una prueba de ida y vuelta de los enums. | **EN QA** | Falta una prueba de ida y vuelta por cada valor de enum (criterio literal). |
+| T73 | 2026-11-23 | En vivo: agente en BLOCKED y en SLEEP_QUOTA vía PATCH; captura de la Oficina 3D. Restaurado a IDLE. | **PASA** | BLOCKED → Zona B, pizarra de Sheldon, con punto rojo y contador "Revisión Sheldon: 1". SLEEP_QUOTA → Zona C, apartamento BBT, contador "Descansando: 1" (en la primera captura estaba a medio camino; tras esperar, dentro del apartamento). |
+| T74 | 2026-11-23 | Tiempo real por SSE: ticket creado por API y movimientos hechos en la UI. | **EN QA** | El ticket creado por API aparece en vivo. Los movimientos se ven con 3–6 s de retraso. El criterio pide < 1 s y no lo medí con precisión. |
+| T75 | 2026-11-23 | BD real vacía: estado vacío, sin datos de ejemplo, creación de agente y tarea, recarga de página. | **PASA** | Sin `INITIAL_*` en `src/`. Estado vacío "Todavía no hay agentes" con "Crear primer agente". Tras crear el agente y mover la tarea, la recarga conserva todo y el contador muestra 1 agente. Sin datos de ejemplo. |
+| F03a | 2026-11-23 | Menú y creación de agente desde la UI, comprobado en todas las vistas. | **PASA** | Menú: To-Do & Pipeline, Calendario, Cerebro, Oficina IA 3D, Administración. Agente creado en el modal: visible en Kanban (contador), Cerebro (monitor de memoria 1/1), 3D (zona de descanso) y Administración (Agentes). |
+| F03a-conexión | 2026-11-23 | Administración → Conexión BD en vivo. | **PASA** | "Configuración inicial pendiente (modo SETUP)"; base de datos conectada: Sí; administrador creado: No. No muestra URL ni token. |
+| F07 | 2026-11-23 | En vivo: añadir 2 conexiones, lista `••••last4`, Rotar y Revocar presentes. Comprobación de almacenamiento y DOM. | **EN QA** | Lista correcta (`••••0001`, `••••0002`). Tras guardar, el campo de clave se vacía. `localStorage`: 0 claves. La clave de prueba no está en el DOM. `sessionStorage` no se puede leer con esta herramienta (salida censurada). No inspeccioné la red con DevTools. Pendiente: confirmar `sessionStorage` y la red. |
+| G07 | 2026-11-23 | Verificación de qué está commiteado. | **NO VALIDADA** | El modal de G07 (`CreateAgentProfileModal.tsx`, `agentProfile.ts`) está sin commitear. En HEAD aparece el modal antiguo. |
+| CAL01 | 2026-11-23 | Calendario en vivo: qué día marca "HOY". Revisión de código. | **DEVUELTA** | Marca **22 nov**; hoy es **23 nov**. Causa: `src/components/RoadmapCalendarView.tsx` tiene la fecha fijada en código: `dateToPct('2026-11-22')` (línea 226), `title="Hoy: 22 Nov 2026"` (línea 307) y `cell.dateStr === '2026-11-22'` (línea 425). Hay que calcular "hoy" con la fecha local del navegador. |
+| MOD01, TSK01, WS01 | 2026-11-23 | Búsqueda en repos, TASKS e historial. | **NO ENCONTRADA** | Sin definición. No se validan. |
+| K01 | 2026-11-23 | Decisión del CEO: aprobada. Intenté el arrastre con ratón en el navegador (3.er intento): no se mueve la tarjeta. | **HECHO** (aprobación CEO) | Queda registrado que la validación del arrastre la hace el CEO. |
+| C02 | 2026-11-23 | Decisión del CEO: HECHO. Evidencia: la API real conectada a Turso responde `hasDatabase: true` y devuelve el snapshot. | **HECHO** (aprobación CEO) | No leí la bóveda ni el `.env`. |
+
+### QM0 — hito con la BD real vacía
+
+| Paso | Resultado | Evidencia |
+|---|---|---|
+| BD real vacía al inicio | **PASA** | 0 agentes, 0 tickets, 0 aprobaciones. |
+| Crear agente desde el modal y verlo en todas las vistas | **PASA** | "QA R6 Agente" creado y visible en Kanban, Cerebro, 3D y Administración. |
+| 2 conexiones API | **PASA** | QA-R6-A y QA-R6-B (mismo proveedor, etiquetas distintas). Revocadas al terminar. |
+| Crear tarea con especificación dividida | **PASA** (con matiz) | El modal tiene un único campo "Especificación técnica". Escribí criterios y dependencias en bloques separados dentro de ese campo. |
+| Moverla por el flujo | **PASA** | Backlog → En Desarrollo → Revisión de Sheldon → Aprobación CEO → Completado. |
+| Recargar y que todo siga ahí | **PASA** | Tras recargar: tareas, agente y estados. Sin datos de ejemplo. |
+| Calendario marca hoy con la fecha local | **FALLA** | Marca 22 nov (ver CAL01). |
+
+**Defectos nuevos observados en QM0:**
+1. **Asignación al crear tarea:** en el modal elegí "QA R6 Agente" y pulsé "Crear y Asignar Tarea". La tarea se creó como **"Sin asignar"**. La selección del desplegable no quedó guardada.
+2. **Tarea creada desde la UI no aparece en vivo:** la tarea creada en el modal no apareció en el tablero hasta recargar. Las tareas creadas por API sí aparecen en vivo.
+3. **Latencia del tiempo real:** 3–6 s en vez de < 1 s (ver T74).
+
+### Estados aplicados en TASKS.md
+- **HECHO:** T70, T71, T73, T75, F03a, C05, G05 (pendiente de S09), K01 (aprobación CEO), C02 (aprobación CEO).
+- **EN QA:** T72, T74, F07 (motivos arriba).
+- **DEVUELTA:** QM0 (calendario CAL01 y defectos 1 y 2).
+- **Sin validar / no encontradas:** J01–J04, CAL01 (no tiene fila propia; se devuelve dentro de QM0), MOD01, TSK01, WS01, G07 (sin commitear).
+
+### Datos de prueba dejados en la BD real
+- Agente **QA R6 Agente** (`1ffb81ba-17ff-475b-9270-a5eb31b2c964`), estado IDLE.
+- Tickets: "QA R6 - prueba realtime SSE" (PENDING), "QA R6 - prueba de transiciones G05" (DONE), "QA R6 - tarea de prueba con especificacion dividida" (DONE).
+- Conexiones: QA-R6-A y QA-R6-B, **revocadas**. QA-R6-C creada y revocada en la prueba C05.
+- No borré nada. Si quieres dejar la BD limpia, dime si archivo el agente y muevo o borro los tickets.
