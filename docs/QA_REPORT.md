@@ -322,3 +322,36 @@ Todos los PENDIENTE tienen tarea asociada (S06, S07, S08, S09, S11, S12, F05, T3
 - Probar después los PENDIENTE al implementarse (QS1–QS5).
 - Mantener C02 (token de Turso) y K01 (validación del CEO) como están.
 - Antes de cerrar esta auditoría: confirmar con el Arquitecto si el commit/push de este informe lo hago yo o lo hace él (no lo he hecho).
+
+---
+
+## Validación QA Senior — 2026-11-22
+
+Alcance: no había tareas en **EN REVISIÓN**; se validan las que están **EN QA** en `dev` (API `d79e09a`, FRONT `a58135a`). No se encontró en este informe evidencia del QA Junior para ellas, así que cada criterio se repitió por separado. No se cambió ningún estado en `TASKS.md`: según el flujo, las tareas de API se cierran al pasar a EN REVISIÓN.
+
+Comprobaciones generales (copia limpia de `dev`, Python 3.13):
+- `ruff check .` → All checks passed (exit 0).
+- `mypy app` → Success: 32 source files (exit 0).
+- `pytest` → 100 % pasa (exit 0).
+- FRONT `npm run lint` (tsc) → exit 0; `npm run build` → exit 0.
+
+| Tarea | Criterio | Resultado | Evidencia | Recomendación |
+|---|---|---|---|---|
+| **T02** | Sin `TURSO_DATABASE_URL` el proceso termina con error; con valores válidos exporta objeto tipado. | **NO CUMPLE el criterio literal** (sin URL no termina con error) · valores válidos: CUMPLE | `Settings` sin `TURSO_DATABASE_URL` → sin error (`None`); `ORCHESTRATOR=foo` → `Input should be 'noop'`, exit 1; `Settings(port=4100)` → tipado. | Decisión del Arquitecto: el criterio lo sustituye PLAN §16 (la nota de T02 lo dice), pero el criterio escrito sigue igual. Actualizarlo o devolver. |
+| **T22** | `typecheck` pasa; sin `enum` en el código. | CUMPLE | `mypy app` pasa; `grep` de `enum`/`class … Enum` en `app/` → 0 coincidencias. | Recomendación: HECHO. |
+| **T23** | Test unitario: suscriptor recibe el evento con payload tipado. | CUMPLE | `tests/test_bus.py` pasa (5 tests). | Recomendación: HECHO. |
+| **T24** | `pytest` con test de `/api/health` en verde; no crea ni modifica `local.db`. | CUMPLE | `test_infra.py` + `test_health.py` pasan; tras `pytest` no hay `local.db` ni `data/` en el repo. | Recomendación: HECHO. |
+| **S02** | Ejecutarlo dos veces no cambia el `.env`; sin valores reales en `.env.example`. | CUMPLE | `setup_env.py` en carpeta temporal: 1ª y 2ª ejecución, exit 0; SHA-1 del `.env` idéntico. `APP_MASTER_KEY` y `SESSION_SECRET` vacíos en `.env.example`. | Recomendación: HECHO. Seguridad: mapea al hallazgo **#15** (CUMPLE en la línea base). |
+| **S04** | Hash ≠ contraseña; dos hashes de la misma clave distintos; buena → true, mala → false. | CUMPLE | `test_password.py` pasa (12 tests). Prueba directa: hash ≠ clave, hashes distintos, verify ok/false. | Recomendación: HECHO. Seguridad: mapea al hallazgo **#11** (CUMPLE en la línea base). |
+| **G01** | `AWAITING_APPROVAL` → falla CHECK; `gate=5` → falla; tests de esquema pasan. | CUMPLE | Inserciones reales en BD temporal migrada: `AWAITING_APPROVAL` → "CHECK constraint failed: status IN (…)"; `gate=5` → "CHECK constraint failed: gate BETWEEN 1 AND 4"; `gate=1` → OK. `test_schema.py` pasa (20 tests). | Recomendación: HECHO. El cambio está en `001_init.sql` (corrección única permitida). |
+
+Tareas FRONT:
+- **K01** (EN QA): lint y build pasan. **Pendiente** la prueba del arrastre con ratón entre las 5 columnas (no se puede simular con el navegador de prueba; ver ronda 2) y la aprobación del Dev Senior. No se marca HECHO.
+- **F03a** (EN QA): lint y build pasan; sin `localhost:4000` ni referencias a GEMINI/genai en `src/`. Pendiente la comprobación con la API: el menú con 5 módulos en orden y la creación de agente desde Administración visible en las demás vistas. Requiere la aprobación del Dev Senior. No se marca HECHO.
+
+### Resumen
+
+- Recomendado HECHO: T22, T23, T24, S02, S04, G01.
+- Decisión del Arquitecto: T02 (criterio obsoleto frente a PLAN §16).
+- Pendiente de aprobación del Dev Senior y de prueba manual: K01, F03a.
+- No hay evidencia del QA Junior en este informe para estas tareas; las pruebas aquí son reproducidas por el QA Senior.
