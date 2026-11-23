@@ -22,7 +22,11 @@ strict = true
 files = ["app"]
 plugins = ["pydantic.mypy"]
 
+[[tool.mypy.overrides]]
+module = ["libsql"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-filterwarnings = ["ignore::DeprecationWarning:starlette.testclient"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
