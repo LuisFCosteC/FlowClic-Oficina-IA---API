@@ -1,0 +1,27 @@
+[project]
+name = "flowclic-oficina-ia-api"
+version = "0.1.0"
+description = "API de FlowClic Oficina IA (Fase 1)"
+requires-python = ">=3.13,<3.14"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106"]
+"scripts/*" = ["S603", "S607"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["app"]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

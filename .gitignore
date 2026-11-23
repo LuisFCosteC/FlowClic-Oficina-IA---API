@@ -1,7 +1,13 @@
-node_modules/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .env
+.env.bak
 local.db*
+backups/
 *.log
 coverage/
-backups/
-.env.bak
+node_modules/
