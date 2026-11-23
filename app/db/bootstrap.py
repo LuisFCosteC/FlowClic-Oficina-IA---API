@@ -5,6 +5,7 @@ from pathlib import Path
 from app.config import Settings
 from app.db.database import Database, connect_database
 from app.security.crypto import SecretBox
+from app.security.envfile import import_env_secrets
 from app.security.vault import Vault, VaultError
 
 
@@ -28,6 +29,8 @@ def open_database_from_vault(vault: Vault, driver: str = "libsql") -> Database |
 def open_configured_database(settings: Settings) -> tuple[Database, Vault] | None:
     """Abre la BD configurada en la bóveda. None si no hay conexión guardada (modo SETUP)."""
     vault = build_vault(settings)
+    # Si el .env aun trae TURSO_*, se importan a la boveda y se borran del .env (PLAN 16.4).
+    import_env_secrets(Path(".env"), vault, settings.turso_database_url, settings.turso_auth_token)
     db = open_database_from_vault(vault, settings.db_driver)
     if db is None:
         vault.close()
