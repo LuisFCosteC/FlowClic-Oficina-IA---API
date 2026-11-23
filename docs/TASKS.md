@@ -657,6 +657,22 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Probar: Ir a Administración → pestaña "Conexión BD"; verificar las métricas del estado actual; pulsar "Hacer backup ahora" y comprobar el banner verde con la ruta del backup; ingresar una URL como `file:local.db` y pulsar "Probar conexión"; intentar guardar y comprobar el modal de advertencia y la respuesta de la API.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 481ms). Commit `cc3c41b` en `dev` del FRONT.
 
+- **AG-MANUAL (Dev Junior, 2026-11-23, EN QA)** — Creación manual de agentes sin plantillas, selector reporta a y workspaces dinámicos:
+  - Eliminado el selector de plantillas y toda precarga en `CreateAgentProfileModal.tsx`.
+  - Eliminado el archivo `src/data/agentTemplates.ts` y sus imports en todo el frontend.
+  - El formulario empieza completamente vacío al crear agente: nombre, rol, reporta a, funciones, reglas, restricciones propias, permisos, modelo con respaldo y condición, y límites.
+  - Las 6 restricciones globales inviolables se mantienen visibles y bloqueadas con candado (`Lock`).
+  - Añadido selector "Reporta a": lista los agentes existentes en el sistema más la opción "CEO".
+  - Espacios de trabajo en permisos:
+    - Salen exclusivamente de `GET /api/admin/workspaces`, sin ninguno marcado por defecto.
+    - Si la lista está vacía, muestra la tarjeta de aviso *"No hay espacios de trabajo. Créalos en Administración → Espacios de trabajo"* con un botón de navegación directa que abre dicha pestaña en Administración.
+    - El error de validación 400 de `permissions.workspaces` se renderiza claramente bajo la sección de espacios.
+  - Modelos de lenguaje: consultados dinámicamente de `GET /api/models`, agrupados en `optgroup` ("Claude", "Gemini", "Otros Modelos"), mostrando la etiqueta *"— sin conexión"* si `hasConnection=false`.
+  - Edición de agentes preservada al 100%: envía `PATCH` solo con los campos efectivamente modificados.
+  - Probar: Ir a Administración → pestaña "Agentes" y pulsar "Crear agente"; verificar que no hay selector de plantillas y que los campos inician vacíos; comprobar el selector "Reporta a" con los agentes existentes y "CEO"; verificar que en Permisos los espacios de trabajo vienen de la API y si no hay workspaces aparece el aviso con botón a la pestaña correspondiente; verificar que los modelos están agrupados con indicador de sin conexión; editar un agente existente y comprobar que solo se envían los campos cambiados.
+  - Pendiente revisión Dev Senior.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 468ms). Commit `27b9a81` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
