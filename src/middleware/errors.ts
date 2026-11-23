@@ -1,13 +1,14 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { ZodError } from 'zod';
 
-export type ErrorCode = 'VALIDATION_ERROR' | 'NOT_FOUND' | 'CONFLICT' | 'UNPROCESSABLE' | 'INTERNAL';
+export type ErrorCode = 'VALIDATION_ERROR' | 'NOT_FOUND' | 'CONFLICT' | 'UNPROCESSABLE' | 'PAYLOAD_TOO_LARGE' | 'INTERNAL';
 
 const STATUS: Record<ErrorCode, number> = {
   VALIDATION_ERROR: 400,
   NOT_FOUND: 404,
   CONFLICT: 409,
   UNPROCESSABLE: 422,
+  PAYLOAD_TOO_LARGE: 413,
   INTERNAL: 500,
 };
 
@@ -40,6 +41,7 @@ export const notFoundHandler: RequestHandler = (req, res) => {
 };
 
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+  const requestId = res.locals.requestId as string | undefined;
   if (err instanceof ZodError) {
     const details = err.issues.map((i) => ({ path: i.path.join('.'), message: i.message }));
     const first = details[0];
@@ -56,6 +58,10 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(400).json(body('VALIDATION_ERROR', 'JSON inválido'));
     return;
   }
-  console.error('[error]', err);
+  if (err && typeof err === 'object' && (err as { type?: string }).type === 'entity.too.large') {
+    res.status(413).json(body('PAYLOAD_TOO_LARGE', 'El cuerpo de la petición es demasiado grande'));
+    return;
+  }
+  console.error('[error]', requestId ?? '-', err instanceof Error ? err.message : err);
   res.status(500).json(body('INTERNAL', 'Error interno del servidor'));
 };

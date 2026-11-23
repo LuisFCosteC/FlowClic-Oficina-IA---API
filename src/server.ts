@@ -6,8 +6,8 @@ import { createBus } from './events/bus.ts';
 const db = await getDb();
 const app = createApp({ db, corsOrigin: env.CORS_ORIGIN, bus: createBus() });
 
-const server = app.listen(env.PORT, () => {
-  console.log(`API escuchando en http://localhost:${env.PORT}`);
+const server = app.listen(env.PORT, env.HOST, () => {
+  console.log(`API escuchando en http://${env.HOST}:${env.PORT}`);
 });
 
 function shutdown() {

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const schema = z.object({
+  HOST: z.string().min(1).default('127.0.0.1'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   TURSO_DATABASE_URL: z
     .string({ error: 'falta TURSO_DATABASE_URL (p. ej. file:local.db)' })
