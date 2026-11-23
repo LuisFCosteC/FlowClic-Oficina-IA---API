@@ -60,7 +60,7 @@ def test_db(body: DbTestBody, request: Request) -> DbTestResult:
     summary="Cambiar de BD en caliente (prueba, migra y guarda en la bóveda)",
     description=(
         "Exige `ADMIN_ALLOW_DB_CHANGE=true` (si no, 403). `authToken` vacío conserva el token "
-        "guardado solo si el host no cambia. Cambiar de BD no copia los datos."
+        "guardado solo si la URL es idéntica. Cambiar de BD no copia los datos."
     ),
     responses={
         403: {"model": ErrorResponse, "description": "Cambio de BD desactivado"},

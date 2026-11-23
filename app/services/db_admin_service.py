@@ -3,8 +3,8 @@
 Reglas de seguridad:
 - El token NUNCA sale de aquí: ni en respuestas, ni en errores, ni en logs, ni en auditoría.
 - Los mensajes de error no reflejan la URL ni el token (los fabrica `setup_service`).
-- «Vacío = conservar el token actual» solo vale si el HOST no cambia: si no, el token de una BD
-  se enviaría a otro servidor.
+- «Vacío = conservar el token actual» solo si la URL es idéntica (byte a byte): si no, el token de
+  una BD se enviaría a otro servidor.
 - `/test` no cambia nada: no migra y ni siquiera crea un archivo `file:` que no exista.
 """
 
@@ -141,8 +141,8 @@ def change_database(
         old_url = vault.get_secret("db.url")
         old_token = vault.get_secret("db.auth_token")
         new_token = token or None
-        if new_token is None and old_url and describe(old_url) == describe(url):
-            new_token = old_token  # mismo host: se conserva el token guardado
+        if new_token is None and old_url is not None and old_url == url:
+            new_token = old_token  # misma URL exacta: se conserva el token guardado
         new_db = setup_service.connect_and_migrate(url, new_token, settings.db_driver)
         try:
             vault.set_secret("db.url", url, updated_by="admin")
