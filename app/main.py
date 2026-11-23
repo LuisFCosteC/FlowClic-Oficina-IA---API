@@ -11,8 +11,10 @@ from app import __version__
 from app.config import Settings, get_settings
 from app.db.database import Database, clear_db, set_db, try_get_db
 from app.errors import register_error_handlers
+from app.events.bus import EventBus, get_bus
 from app.middleware import SetupModeMiddleware
-from app.routers import agent_templates, agents, health, setup, snapshot
+from app.realtime.sse import SSEHub
+from app.routers import agent_templates, agents, events, health, setup, snapshot
 from app.security.setup_gate import SetupGate
 from app.security.vault import Vault
 from app.services.setup_service import has_admin
@@ -22,6 +24,7 @@ def create_app(
     settings: Settings | None = None,
     db: Database | None = None,
     vault: Vault | None = None,
+    bus: EventBus | None = None,
 ) -> FastAPI:
     """Crea la aplicación (sin arrancar servidor; reutilizable en tests).
 
@@ -33,6 +36,8 @@ def create_app(
     """
     cfg = settings or get_settings()
     gate = SetupGate()
+    the_bus = bus or get_bus()
+    sse_hub = SSEHub(the_bus)
     if db is not None:
         set_db(db)
 
@@ -63,7 +68,9 @@ def create_app(
             if not has_admin(try_get_db()):
                 gate.issue()  # modo SETUP: el código solo se imprime en la consola
         app.state.vault = active_vault
+        sse_hub.start()
         yield
+        sse_hub.stop()
         if opened_db and (current := try_get_db()) is not None:
             current.close()
         if own_vault and active_vault is not None:
@@ -81,6 +88,8 @@ def create_app(
     app.state.settings = cfg
     app.state.vault = vault
     app.state.setup_gate = gate
+    app.state.sse_hub = sse_hub
+    app.dependency_overrides[get_bus] = lambda: the_bus  # rutas, SSE y tests: el mismo bus
     register_error_handlers(app)
 
     app.add_middleware(SetupModeMiddleware)
@@ -96,6 +105,7 @@ def create_app(
     app.include_router(agent_templates.router)
     app.include_router(agents.router)
     app.include_router(snapshot.router)
+    app.include_router(events.router)
     return app
 
 
