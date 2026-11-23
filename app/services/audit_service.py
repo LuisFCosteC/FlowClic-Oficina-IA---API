@@ -74,7 +74,11 @@ def list_entries(
     if (to := _iso(date_to, "to")) is not None:
         where.append("created_at <= ?")
         params.append(to)
-    sql = "SELECT * FROM audit_log"
+    # Alias explícitos: en Turso la columna puede venir como "ACTION" con SELECT *.
+    sql = (
+        "SELECT id AS id, user_id AS user_id, action AS action, target_type AS target_type,"
+        " target_id AS target_id, ip AS ip, meta AS meta, created_at AS created_at FROM audit_log"
+    )
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
