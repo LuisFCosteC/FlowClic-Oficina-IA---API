@@ -30,26 +30,10 @@ def test_get_agent_templates_devuelve_las_5_en_camel_case(client: TestClient) ->
     assert body[-1]["functions"] == [] and len(body) == len(TEMPLATES)
 
 
-def test_cargar_equipo_base_dos_veces_deja_4_agentes(
-    client: TestClient, migrated_db: Database
-) -> None:
-    first = client.post("/api/admin/agents/load-base-team")
-    assert first.status_code == 200
-    assert [a["id"] for a in first.json()["created"]] == ["sheldon", "leonard", "penny", "raj"]
-    assert first.json()["skipped"] == []
-    second = client.post("/api/admin/agents/load-base-team")
-    assert second.json() == {"created": [], "skipped": ["Sheldon", "Leonard", "Penny", "Raj"]}
-    n = migrated_db.fetch_one("SELECT COUNT(*) AS n FROM agents")
-    assert n == {"n": 4}
-    created = first.json()["created"][0]
-    assert created["isCto"] is True and created["status"] == "IDLE"
-    assert created["systemPrompt"].endswith("al llegar a su tope de costo.")
-
-
 def test_el_endpoint_aparece_en_openapi(client: TestClient) -> None:
     paths = client.get("/api/openapi.json").json()["paths"]
     assert "/api/agent-templates" in paths
-    assert "/api/admin/agents/load-base-team" in paths
+    assert "/api/admin/agents/load-base-team" not in paths
 
 
 def test_seed_agents_carga_solo_el_equipo_base_y_demo_agrega_tickets(

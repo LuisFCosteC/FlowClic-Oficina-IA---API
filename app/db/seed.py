@@ -10,7 +10,9 @@ primer arranque o con `python scripts/admin_create.py` (PLAN §12.1 #13).
 import sys
 
 from app.db.database import Database
-from app.services.agents_service import load_base_team
+from app.domain.agent_templates import BASE_TEAM
+from app.repositories import agents_repo
+from app.services.agents_service import build_agent, template_to_create
 from app.util import now_iso
 
 # Tickets sin agente asignado: así los agentes semilla (IDLE) siguen coherentes con la regla R1.
@@ -50,9 +52,24 @@ TICKETS: list[dict[str, str]] = [
 ]
 
 
+def seed_demo_agents(db: Database) -> int:
+    """4 agentes de DEMOSTRACIÓN desde las plantillas. Idempotente. Solo demo y tests.
+
+    El equipo real se siembra con `scripts/seed_team.py` (pasa por los servicios normales).
+    """
+    created = 0
+    for template in BASE_TEAM:
+        if agents_repo.get_agent(db, template.id) is not None:
+            continue
+        agent = build_agent(template_to_create(template), agent_id=template.id)
+        agents_repo.insert_agent(db, agent)
+        created += 1
+    return created
+
+
 def seed(db: Database) -> None:
     """Inserta los datos semilla en una sola transacción. Se puede ejecutar varias veces."""
-    load_base_team(db)  # los 4 agentes, desde las plantillas del CEO (idempotente)
+    seed_demo_agents(db)  # 4 agentes de demostración (idempotente)
     now = now_iso()
     with db.transaction() as tx:
         for i, t in enumerate(TICKETS):
@@ -103,15 +120,12 @@ def main(argv: list[str] | None = None) -> int:
     from app.security.vault import VaultError
 
     parser = argparse.ArgumentParser(description="Datos opcionales (la BD empieza vacia).")
-    parser.add_argument("--agents", action="store_true", help="carga el equipo base (4 agentes)")
     parser.add_argument(
         "--demo", action="store_true", help="carga datos de ejemplo (+ equipo base)"
     )
     args = parser.parse_args(argv)
-    if not (args.agents or args.demo):
-        print(
-            "Nada que hacer: la BD empieza vacia. Usa --agents (equipo base) o --demo (ejemplos)."
-        )
+    if not args.demo:
+        print("Nada que hacer: la BD empieza vacia. Usa --demo (ejemplos) o scripts/seed_team.py.")
         return 0
 
     try:
@@ -124,11 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     db, vault = opened
     try:
-        if args.demo:
-            seed(db)
-        else:
-            created, skipped = load_base_team(db)
-            print(f"Equipo base: {len(created)} creados, {len(skipped)} ya existian.")
+        seed(db)
         n = db.fetch_one("SELECT COUNT(*) AS n FROM agents")
         print(f"Agentes en la BD: {n['n'] if n else 0}")
     finally:

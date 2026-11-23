@@ -3,12 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from app.db.database import Database
 from app.domain.agent_policy import GLOBAL_RESTRICTIONS, check_profile, generate_system_prompt
 from app.domain.agent_templates import BASE_TEAM, TEMPLATES, AgentTemplate
-from app.events.bus import DomainEvent, EventBus
-from app.repositories import agents_repo as repo
-from app.services.agents_service import load_base_team
 
 DOC = Path(__file__).resolve().parent.parent / "docs" / "AGENT_PROFILES.md"
 
@@ -99,43 +95,3 @@ def test_todas_las_plantillas_pasan_la_politica_y_generan_prompt_con_las_globale
             restrictions=t.restrictions,
         )
         assert prompt.endswith(GLOBAL_RESTRICTIONS[4])
-
-
-def test_cargar_el_equipo_base_dos_veces_deja_4_agentes(migrated_db: Database) -> None:
-    bus = EventBus()
-    events: list[DomainEvent] = []
-    bus.subscribe(events.append)
-    created, skipped = load_base_team(migrated_db, bus)
-    assert [a.id for a in created] == ["sheldon", "leonard", "penny", "raj"]
-    assert skipped == []
-    created2, skipped2 = load_base_team(migrated_db, bus)
-    assert created2 == []
-    assert skipped2 == ["Sheldon", "Leonard", "Penny", "Raj"]
-    assert len(repo.list_agents(migrated_db)) == 4
-    assert [e.type for e in events] == ["agent.created"] * 4
-
-
-def test_los_agentes_cargados_tienen_prompt_del_servidor_y_estado_idle(
-    migrated_db: Database,
-) -> None:
-    load_base_team(migrated_db)
-    sheldon = repo.get_agent(migrated_db, "sheldon")
-    assert sheldon is not None
-    assert sheldon.is_cto is True and sheldon.status == "IDLE"
-    assert sheldon.role_type == "CTO"
-    assert sheldon.system_prompt.endswith(GLOBAL_RESTRICTIONS[4])
-    assert "Convertir los pedidos del CEO" in sheldon.system_prompt
-    assert repo.get_agent(migrated_db, "raj").is_cto is False  # type: ignore[union-attr]
-
-
-def test_si_ya_existe_un_agente_con_ese_nombre_se_omite(migrated_db: Database) -> None:
-    from app.domain.schemas import AgentCreate
-    from app.services.agents_service import create_agent
-
-    create_agent(migrated_db, None, AgentCreate(name="Penny", role="Otra Penny"))
-    created, skipped = load_base_team(migrated_db)
-    assert "Penny" in skipped
-    assert sorted(a.name for a in created) == ["Leonard", "Raj", "Sheldon"]
-    # el agente existente no se modifica
-    existing = repo.find_active_by_name(migrated_db, "Penny")
-    assert existing is not None and existing.role == "Otra Penny"

@@ -4,7 +4,7 @@ from typing import Any
 
 from app.db.database import Database, IntegrityError
 from app.domain.agent_policy import check_profile, generate_system_prompt
-from app.domain.agent_templates import BASE_TEAM, AgentTemplate
+from app.domain.agent_templates import AgentTemplate
 from app.domain.schemas import Agent, AgentAvatar, AgentCreate, AgentStatusBody, AgentUpdate
 from app.errors import conflict, not_found, validation_error
 from app.events.bus import EventBus
@@ -65,15 +65,10 @@ def create_agent(
     data: AgentCreate,
     *,
     agent_id: str | None = None,
-    check_workspaces: bool = True,
 ) -> Agent:
-    """Crea un agente (409 si el nombre ya lo usa uno activo) y emite `agent.created`.
-
-    `check_workspaces=False` solo para las plantillas del servidor (equipo base).
-    """
+    """Crea un agente (409 si el nombre ya lo usa uno activo) y emite `agent.created`."""
     agent = build_agent(data, agent_id=agent_id)
-    if check_workspaces:
-        ensure_workspaces_exist(db, agent.permissions)
+    ensure_workspaces_exist(db, agent.permissions)
     if repo.find_active_by_name(db, agent.name) is not None:
         raise conflict(f"Ya existe un agente activo llamado «{agent.name}»")
     try:
@@ -99,34 +94,6 @@ def template_to_create(t: AgentTemplate) -> AgentCreate:
         model=t.model,
         limits=t.limits,
     )
-
-
-def load_base_team(db: Database, bus: EventBus | None = None) -> tuple[list[Agent], list[str]]:
-    """Crea los 4 agentes del equipo base desde las plantillas. Idempotente.
-
-    Devuelve (creados, nombres_omitidos). Se omite una plantilla si ya hay un agente (activo)
-    con ese id o con ese nombre; nunca se modifica un agente existente.
-    """
-    created: list[Agent] = []
-    skipped: list[str] = []
-    for template in BASE_TEAM:
-        existing_by_id = repo.get_agent(db, template.id)
-        if (existing_by_id is not None and existing_by_id.archived_at is None) or (
-            repo.find_active_by_name(db, template.name) is not None
-        ):
-            skipped.append(template.name)
-            continue
-        agent_id = template.id if existing_by_id is None else None  # id libre → slug estable
-        created.append(
-            create_agent(
-                db,
-                bus,
-                template_to_create(template),
-                agent_id=agent_id,
-                check_workspaces=False,  # plantillas del servidor: api/front/docs
-            )
-        )
-    return created, skipped
 
 
 def get_agent_or_404(db: Database, agent_id: str) -> Agent:

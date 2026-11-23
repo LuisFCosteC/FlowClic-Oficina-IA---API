@@ -19,9 +19,11 @@ def events() -> Iterator[list[DomainEvent]]:
 
 
 @pytest.fixture
-def team(client: TestClient) -> dict[str, str]:
-    """Equipo base cargado: ids sheldon, leonard, penny, raj."""
-    client.post("/api/admin/agents/load-base-team")
+def team(client: TestClient, migrated_db: Database) -> dict[str, str]:
+    """Agentes demo cargados: ids sheldon, leonard, penny, raj."""
+    from app.db.seed import seed_demo_agents
+
+    seed_demo_agents(migrated_db)
     return {n: n for n in ("sheldon", "leonard", "penny", "raj")}
 
 

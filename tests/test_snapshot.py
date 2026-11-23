@@ -14,8 +14,12 @@ def test_snapshot_de_la_bd_vacia(client: TestClient) -> None:
     assert set(body) == {"agents", "tickets", "approvals", "serverTime"}
 
 
-def test_devuelve_los_4_agentes_del_equipo_base_tras_cargarlo(client: TestClient) -> None:
-    client.post("/api/admin/agents/load-base-team")
+def test_devuelve_los_4_agentes_demo_tras_cargarlos(
+    client: TestClient, migrated_db: Database
+) -> None:
+    from app.db.seed import seed_demo_agents
+
+    seed_demo_agents(migrated_db)
     body = client.get("/api/snapshot").json()
     assert [a["name"] for a in body["agents"]] == ["Sheldon", "Leonard", "Penny", "Raj"]
     sheldon = body["agents"][0]

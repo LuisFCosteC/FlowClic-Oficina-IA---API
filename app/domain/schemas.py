@@ -5,7 +5,7 @@
   todos los textos tienen longitud máxima.
 """
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
 from pydantic.alias_generators import to_camel
@@ -89,8 +89,8 @@ class AgentAvatar(StrictInput):
     shoe_color: HexColor | None = None
 
     @model_serializer(mode="wrap")
-    def _omit_unset_look(self, handler):
-        data = handler(self)
+    def _omit_unset_look(self, handler: Any) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
         for key in _LOOK_KEYS:
             camel = to_camel(key)
             for k in (key, camel):

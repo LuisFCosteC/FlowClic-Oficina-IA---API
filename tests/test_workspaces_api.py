@@ -141,8 +141,3 @@ def test_agente_con_espacio_inexistente_da_400_y_con_existente_201(
         f"/api/agents/{agent['id']}", json={"permissions": {"workspaces": {"x": "read"}}}
     )
     assert bad.status_code == 400
-
-
-def test_equipo_base_se_carga_aunque_no_haya_espacios(client: TestClient) -> None:
-    r = client.post("/api/admin/agents/load-base-team")
-    assert r.status_code == 200 and len(r.json()["created"]) == 4
