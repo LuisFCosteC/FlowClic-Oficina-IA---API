@@ -596,6 +596,18 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Probar: Ir a Administración → pestaña "Agentes"; activar "Mostrar archivados"; pulsar "Archivar" en un agente sin tareas abiertas y verificar confirmación modal; comprobar que pasa a estado archivado; pulsar "Restaurar" y verificar que reaparece activo; probar archivar un agente con tareas y verificar mensaje 409 en el modal.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 435ms). Commit `5fb1d3c` en `dev` del FRONT.
 
+- **ADM04 (Dev Junior, 2026-11-23, EN QA)** — Configuración de Proyecto (A02 en FRONT):
+  - Habilitada pestaña **"Proyecto"** (`project`) en `AdminView.tsx` y creado componente `ProjectSettingsPanel.tsx`.
+  - Formulario completo consumiendo `GET/PUT /api/admin/settings/project`:
+    - Nombre de la empresa (`companyName`, max 120 car.) y Nombre del proyecto (`projectName`, max 120 car.) con contadores y validación.
+    - Descripción (`description`, max 2000 car.) con contador en vivo.
+    - Objetivos (`goals`, hasta 20 elementos de 200 car.): lista editable en línea con añadir, editar texto existente y eliminar.
+    - Stack tecnológico (`stack`, hasta 30 elementos de 60 car.): visualización en chips con eliminación y adición rápida.
+  - Errores de validación mostrados bajo cada campo individual y banner general.
+  - Sincronización en tiempo real vía SSE (`settings.updated` con `key: "project"`): actualiza los campos en vivo sin recargar la página.
+  - Probar: Ir a Administración → pestaña "Proyecto"; rellenar empresa, proyecto, descripción, añadir 2 objetivos y 3 tecnologías al stack; pulsar "Guardar cambios" y comprobar mensaje verde de éxito; modificar un valor desde curl/API y comprobar que se actualiza en vivo en pantalla.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 471ms). Commit `77d9b50` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
