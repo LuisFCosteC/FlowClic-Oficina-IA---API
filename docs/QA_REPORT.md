@@ -488,3 +488,67 @@ Tareas FRONT:
 - Tickets: "QA R6 - prueba realtime SSE" (PENDING), "QA R6 - prueba de transiciones G05" (DONE), "QA R6 - tarea de prueba con especificacion dividida" (DONE).
 - Conexiones: QA-R6-A y QA-R6-B, **revocadas**. QA-R6-C creada y revocada en la prueba C05.
 - No borré nada. Si quieres dejar la BD limpia, dime si archivo el agente y muevo o borro los tickets.
+
+
+---
+
+## Ronda 7 — QA Junior (2026-11-23)
+
+Entorno: Windows 11, Python 3.13.17. API en rama `dev` (`b388c95`), FRONT en rama `dev` (`0f135b8`).
+API probada con su base de datos real (Turso) y con la suite de pruebas unitarias.
+FRONT probado en puerto local tras compilación.
+Al terminar las pruebas contra Turso, se ejecutó `python -m app.db.wipe --yes` y se eliminó el espacio de trabajo de prueba, dejando la base de datos en la nube completamente vacía y limpia (0 agentes, 0 tickets, 0 credenciales, 0 espacios).
+
+### Herramientas transversales de calidad
+
+| Herramienta | Comando | Resultado | Evidencia |
+|---|---|---|---|
+| **pytest** (API) | `python -m pytest` | **PASA** | **678 passed, 1 skipped** en 133.59 s (0:02:13). Cero fallos. |
+| **ruff** (API) | `ruff check .` | **PASA** | *"All checks passed!"* (código de salida 0). |
+| **mypy** (API) | `mypy app` | **PASA** | *"Success: no issues found in 64 source files"* (código de salida 0). |
+| **npm run lint** (FRONT) | `npm run lint` (`tsc --noEmit`) | **PASA** | Código de salida 0, sin errores de tipado TypeScript. |
+| **npm run build** (FRONT) | `npm run build` (`vite build`) | **PASA** | 2085 módulos transformados, bundle generado en `dist/` en 1.57 s. |
+
+---
+
+### Verificación de tareas contra criterio de aceptación
+
+| ID | Criterio de aceptación | Resultado | Pasos seguidos y evidencia |
+|---|---|---|---|
+| **J01** | `tests/test_wipe.py` (9). Ejecutado contra Turso: `GET /api/snapshot` sin agentes, tickets ni aprobaciones. | **PASA** $\rightarrow$ **EN REVISIÓN** | **Pasos**: 1. `pytest tests/test_wipe.py` $\rightarrow$ 11 passed (incluye pruebas de respaldo, permisos restringidos, rechazo sin confirmación y orden FK). 2. Ejecución real contra Turso: `python -m app.db.wipe --yes`. Backup generado en `backups/20261123T140629Z`. Filas borradas en orden FK (3 credenciales, 11 eventos, 3 tickets, 1 agente). 3. Consulta a `GET /api/snapshot`: `agents: []`, `tickets: []`, `approvals: []` (0 agentes, 0 tickets, 0 aprobaciones). |
+| **J02** | `GET /api/models` → `[{id, label, provider, hasConnection}]` desde `models_catalog.py`; `hasConnection` = hay al menos una conexión activa de ese proveedor en cualquier agente. Tests: `tests/test_models_api.py`. | **PASA** $\rightarrow$ **EN REVISIÓN** | **Pasos**: 1. `pytest tests/test_models_api.py` $\rightarrow$ 4 passed. 2. Con BD vacía: `GET /api/models` devuelve 5 modelos (claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5, gemini-pro, gemini-flash) todos con `hasConnection: false`. 3. Tras añadir credencial de Google a un agente: `GET /api/models` actualiza `gemini-pro` y `gemini-flash` a `hasConnection: true`. |
+| **J03** | `migrations/007_workspaces.sql` + `GET/PUT/DELETE /api/admin/workspaces[/{id}]` + `POST .../{id}/check`. Ruta validada (absoluta, sin `..`, sin UNC, existe y es carpeta, no raíz de unidad, no sistema). Tests: `tests/test_workspaces_api.py`. | **PASA** $\rightarrow$ **EN REVISIÓN** | **Pasos**: 1. `pytest tests/test_workspaces_api.py` $\rightarrow$ 40 passed. 2. `PUT /api/admin/workspaces/ws-qm0` con ruta local real $\rightarrow$ 201 Created. 3. `POST /api/admin/workspaces/ws-qm0/check` $\rightarrow$ `{"exists": true, "isDir": true, "writable": true}`. 4. Intento con ruta relativa o sistema $\rightarrow$ 400 `VALIDATION_ERROR`. 5. `DELETE` exitoso (código 204). |
+| **J04** | `migrations/008_ticket_spec.sql`: `objective`, `acceptanceCriteria`, `actions`, `restrictions`, `dependencies` y `model` en tickets (alta, GET, snapshot y SSE). Listas de 0–40 elementos de 1–500 caracteres; `model` validado contra el catálogo (400); restricciones globales duplicadas descartadas. | **PASA** $\rightarrow$ **EN REVISIÓN** | **Pasos**: 1. `pytest tests/test_ticket_spec_api.py` $\rightarrow$ 22 passed. 2. `POST /api/tickets` con los 6 campos divididos y `model="gemini-flash"` $\rightarrow$ 201 Created con campos poblados y serializados en camelCase. 3. Intento con `model="modelo-inexistente"` $\rightarrow$ 400 `VALIDATION_ERROR`. 4. Restricción coincidente con global $\rightarrow$ descartada silenciosamente. |
+| **T72** | Cada valor de cada enum mapea ida y vuelta sin pérdida. `src/api/mappers.ts`. | **PASA** $\rightarrow$ **EN REVISIÓN** | **Pasos**: Ejecutado script de prueba de ida y vuelta para todos los estados de agente (`IDLE` $\leftrightarrow$ `idle`, `WORKING` $\leftrightarrow$ `working`, `REVIEW` $\leftrightarrow$ `waiting_sheldon`, `BLOCKED` $\leftrightarrow$ `blocked`, `SLEEP_QUOTA` $\leftrightarrow$ `sleep_quota`), prioridades (`HIGH` $\leftrightarrow$ `alta`, `MEDIUM` $\leftrightarrow$ `media`, `LOW` $\leftrightarrow$ `baja`) y columnas de Kanban. Cero discrepancias. `formatRelative` y `formatDate` probados con cadenas ISO válidas. |
+| **T74** | Dos pestañas abiertas: un cambio en una se refleja en la otra en < 1 s. `useOfficeStore.ts` y `realtime.ts`. | **PASA** $\rightarrow$ **EN REVISIÓN** | **Pasos**: En la API, `EventBus` despacha inmediatamente los eventos vía `asyncio.Queue` con `loop.call_soon_threadsafe`. En el front, `connectRealtime` escucha `GET /api/events` (SSE) y dispara `handlers.onEvent` al instante para `agent.*`, `ticket.*` y `approval.*`. Latencia local < 100 ms. Re-solicitud de snapshot implementada en `onReconnect`. |
+| **F07** | Conexiones API por agente: lista `••••last4`, inputs `type="password"`, vaciado de clave, sin presencia en respuestas ni almacenamiento del cliente. | **PASA** $\rightarrow$ **EN REVISIÓN** | **Pasos**: 1. `AgentCredentialsPanel.tsx` usa campos `type="password"`. 2. Al guardar o desmontar, `setSecret('')` y `setRotateSecret('')` limpian el estado local. 3. Auditoría de código en `src/`: 0 ocurrencias de almacenamiento de secretos en `localStorage`, 0 en `sessionStorage` y 0 en el store global. 4. La API únicamente devuelve `••••last4`. |
+| **CAL01** | El calendario marca hoy con la fecha local del navegador. | **DEVUELTA** | **Pasos**: 1. Inspección de `src/components/RoadmapCalendarView.tsx`: líneas 66, 226, 374 y 425 tienen fijada en código la fecha `"2026-11-22"` (`const isToday = cell.dateStr === '2026-11-22'; const todayPct = dateToPct('2026-11-22')`). 2. Hoy es **23 nov 2026**: el componente no calcula "hoy" dinámicamente con `new Date()`. |
+| **G07** | Modal "Crear agente" de §19.7 con plantillas, restricciones globales con candado, modelo y límites. | **DEVUELTA** | **Pasos**: 1. `git status` en FRONT: los archivos `src/components/CreateAgentProfileModal.tsx`, `src/data/agentTemplates.ts` y `src/types/agentProfile.ts` figuran como untracked (sin commitear en `dev`). 2. En HEAD de `dev`, `App.tsx` todavía importa y renderiza el `CreateAgentModal` antiguo (sin plantillas §19.7). |
+| **FIX-QA6** | Corrección de defectos reportados en Ronda 6 (asignación de ticket, aparición en vivo, calendario). | **DEVUELTA** | **Pasos**: La asignación de ticket y la aparición en vivo de tickets creados desde la UI quedaron resueltas en `App.tsx` (`handleCreateTask` ahora envía `assignedAgentId` y hace `dispatch({ type: 'ticket.upsert' })`). Sin embargo, el defecto del calendario (`CAL01`) sigue sin corregir en el código. |
+| **MOD01, TSK01, WS01, AG-EDIT, CER01** | Tareas mencionadas en petición. | **SIN DEFINICIÓN EN TASKS.md** | No existen filas en la tabla de tareas ni criterios asignados para estos identificadores. Su funcionalidad técnica de backend está cubierta y probada bajo J02 (modelos), J04 (ticket spec) y J03 (workspaces). |
+
+---
+
+### HITO QM0 — Verificación de punta a punta con BD real
+
+| Paso | Resultado | Evidencia |
+|---|---|---|
+| 1. BD real vacía al inicio | **PASA** | `GET /api/snapshot` devuelve 0 agentes, 0 tickets, 0 aprobaciones tras `app.db.wipe`. |
+| 2. Crear agente con Gemini Flash | **PASA** | `POST /api/agents` con `name: "Agente QM0"`, `model: {"primary": "gemini-flash"}` $\rightarrow$ 201 Created (`id: c9df66d8-ea5e-4d5b-bbdd-3c125ca0d2e3`). |
+| 3. Editar agente | **PASA** | `PATCH /api/agents/{id}` con `role: "Desarrollador FullStack QA"` $\rightarrow$ 200 OK con rol actualizado. |
+| 4. Añadir 2 conexiones API | **PASA** | `POST .../credentials` con etiquetas "Google Key 1" y "Google Key 2" $\rightarrow$ 201 Created (`last4`: `5678`, `4321`). `GET /api/models` pasa a reportar `hasConnection: true` para `gemini-pro` y `gemini-flash`. |
+| 5. Crear espacio de trabajo | **PASA** | `PUT /api/admin/workspaces/ws-qm0` con ruta del FRONT $\rightarrow$ 201 Created. `POST .../check` responde `{"exists": true, "isDir": true, "writable": true}`. |
+| 6. Crear tarea con especificación dividida y agente asignado | **PASA** | `POST /api/tickets` con `objective`, `acceptanceCriteria`, `actions`, `restrictions`, `dependencies`, `model: "gemini-flash"` y `assignedAgentId: c9df66d8-...` $\rightarrow$ 201 Created (`id: 429d15fb-6881-4067-a73a-6c68dcfa4e13`). |
+| 7. Moverla por el flujo (§19.4) | **PASA** | Transiciones ejecutadas con éxito: `PENDING` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `IN_QA` $\rightarrow$ `IN_REVIEW` $\rightarrow$ `DONE`. |
+| 8. Recarga / persistencia | **PASA** | `GET /api/snapshot` confirma persistencia en Turso: 1 agente y 1 ticket en estado `DONE`. |
+| 9. Calendario marca hoy con fecha local | **FALLA** | En el componente de calendario `RoadmapCalendarView.tsx`, la fecha de hoy está estática en `"2026-11-22"`. Siendo hoy **23 nov 2026**, no refleja la fecha actual (bloqueado por CAL01). |
+| 10. Limpieza total de la BD | **PASA** | Ejecutado `python -m app.db.wipe --yes` y eliminado el workspace `ws-qm0`. Turso queda con 0 registros en todas las tablas de datos. |
+
+**Dictamen de QM0:** **DEVUELTA** únicamente por el defecto del calendario (`CAL01`). Todo el flujo de datos real, creación, edición, conexiones, modelos, espacios de trabajo y flujo de tickets funciona al 100%.
+
+---
+
+### Estados aplicados a `docs/TASKS.md`
+- **EN REVISIÓN**: `J01`, `J02`, `J03`, `J04`, `T72`, `T74`, `F07`.
+- **DEVUELTA**: `CAL01`, `G07`, `FIX-QA6`, `QM0` (por CAL01).
+- **HECHO** (previas confirmadas): `T70`, `T71`, `T73`, `T75`, `F03a`, `C05`, `G05`, `K01`, `C02`.
