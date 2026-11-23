@@ -629,6 +629,14 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Probar: Ir a Administración → pestaña "Límites"; ajustar máximo de agentes a 10 y tickets activos a 2; activar o desactivar exigencia de aprobación; pulsar "Guardar límites" y verificar mensaje de éxito; comprobar que al intentar superar los límites en la creación de agentes o transición de tickets la API rechaza la acción con error 409.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 427ms). Commit `b3bcdf6` en `dev` del FRONT.
 
+- **ADM07 (Dev Junior, 2026-11-23, EN QA)** — Registro de Auditoría (A07a en FRONT):
+  - Habilitada pestaña **"Auditoría"** (`audit`) en `AdminView.tsx` y creado componente `AuditPanel.tsx`.
+  - Tabla de solo lectura que consume `GET /api/admin/audit?limit=200`: fecha formateada, acción ejecutada con badge distintivo, objetivo (targetType y targetId) y actor (userId e IP).
+  - Filtros en vivo: búsqueda por acción y rangos de fecha desde/hasta (convertidos a ISO-8601) con botón de reseteo.
+  - Botón **"Ver meta"** por fila que abre visualizador modal con los metadatos en texto plano preformateado (JSON legible, sin inyección ni renderizado HTML).
+  - Probar: Ir a Administración → pestaña "Auditoría"; verificar las entradas de acciones previas (ej. cambios de settings, agentes, límites); filtrar por acción escribiendo "settings" o seleccionando fechas; pulsar "Ver meta" en una fila y comprobar que el JSON se despliega en texto plano de solo lectura.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 441ms). Commit `55a275b` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
