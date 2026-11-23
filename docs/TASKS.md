@@ -578,6 +578,15 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Probar: Ir a Administración → pestaña "Espacios de trabajo"; crear un workspace (ej: `test-ws`, "Test", "D:\\PROGRAMACION"); pulsar "Comprobar" y verificar que el badge cambia a verde "Disponible (RW)"; pulsar "Editar" y modificar el nombre; probar borrar un workspace y verificar confirmación modal en UI y manejo de 409.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 464ms). Commit `4d5ece4` en `dev` del FRONT.
 
+- **ADM02 (Dev Junior, 2026-11-23, EN QA)** — Conexiones API vista global y modelos (FRONT):
+  - Añadida pestaña activa **"Conexiones API"** (`connections`) en `AdminView.tsx` y componente `ConnectionsPanel.tsx`.
+  - Tarjeta de catálogo de modelos disponibles consumiendo `GET /api/models` con badges dinámicos de conectividad (`Conectado` / `Sin conexión`).
+  - Tabla global de conexiones activas consumiendo `GET /api/admin/credentials`: agente, proveedor, etiqueta, `••••last4`, fecha de creación y última fecha de rotación.
+  - Filtros combinados reactivos por proveedor (Anthropic, OpenAI, Google, Otro) y por agente.
+  - Botón **"Gestionar agente"** por fila que abre el panel modal F07 (`AgentCredentialsPanel`) con rotación, revocación y adición segura de claves (type="password", sin persistencia en cliente).
+  - Probar: Ir a Administración → pestaña "Conexiones API"; comprobar el catálogo de modelos arriba; filtrar por proveedor o agente; pulsar "Gestionar agente" en una fila para abrir el panel de credenciales de ese agente; rotar o añadir credencial y al cerrar verificar que la tabla global se actualiza.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 484ms). Commit `78fb828` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
