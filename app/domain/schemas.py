@@ -393,3 +393,25 @@ class StatusSummary(CamelModel):
     pending_approvals: list[PendingApprovalBrief]
     next_step: str
     summary: str
+
+
+# ── Espacios de trabajo (J03) ────────────────────────────────────────────────────────────────
+class Workspace(CamelModel):
+    id: str
+    name: str
+    path: str
+    created_at: str
+    updated_at: str
+
+
+class WorkspaceBody(StrictInput):
+    name: Name
+    path: Annotated[str, Field(min_length=1, max_length=500)]
+
+
+class WorkspaceCheck(CamelModel):
+    """Resultado de comprobar la carpeta. Nunca lista su contenido."""
+
+    exists: bool
+    is_dir: bool
+    writable: bool

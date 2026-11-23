@@ -16,6 +16,7 @@ from app.middleware import SecurityMiddleware, SetupModeMiddleware
 from app.realtime.sse import SSEHub
 from app.routers import (
     admin_credentials,
+    admin_workspaces,
     agent_templates,
     agents,
     docs,
@@ -120,6 +121,7 @@ def create_app(
     app.include_router(agents.router)
     app.include_router(tickets.router)
     app.include_router(admin_credentials.router)
+    app.include_router(admin_workspaces.router)
     app.include_router(snapshot.router)
     app.include_router(events.router)
     app.include_router(models.router)

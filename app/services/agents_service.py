@@ -9,6 +9,7 @@ from app.domain.schemas import Agent, AgentAvatar, AgentCreate, AgentStatusBody,
 from app.errors import conflict, not_found, validation_error
 from app.events.bus import EventBus
 from app.repositories import agents_repo as repo
+from app.services.workspaces_service import ensure_workspaces_exist
 from app.util import new_id, now_iso
 
 DEFAULT_AVATAR = AgentAvatar(color="#06B6D4")
@@ -59,10 +60,20 @@ def build_agent(data: AgentCreate, *, agent_id: str | None = None) -> Agent:
 
 
 def create_agent(
-    db: Database, bus: EventBus | None, data: AgentCreate, *, agent_id: str | None = None
+    db: Database,
+    bus: EventBus | None,
+    data: AgentCreate,
+    *,
+    agent_id: str | None = None,
+    check_workspaces: bool = True,
 ) -> Agent:
-    """Crea un agente (409 si el nombre ya lo usa uno activo) y emite `agent.created`."""
+    """Crea un agente (409 si el nombre ya lo usa uno activo) y emite `agent.created`.
+
+    `check_workspaces=False` solo para las plantillas del servidor (equipo base).
+    """
     agent = build_agent(data, agent_id=agent_id)
+    if check_workspaces:
+        ensure_workspaces_exist(db, agent.permissions)
     if repo.find_active_by_name(db, agent.name) is not None:
         raise conflict(f"Ya existe un agente activo llamado «{agent.name}»")
     try:
@@ -106,7 +117,15 @@ def load_base_team(db: Database, bus: EventBus | None = None) -> tuple[list[Agen
             skipped.append(template.name)
             continue
         agent_id = template.id if existing_by_id is None else None  # id libre → slug estable
-        created.append(create_agent(db, bus, template_to_create(template), agent_id=agent_id))
+        created.append(
+            create_agent(
+                db,
+                bus,
+                template_to_create(template),
+                agent_id=agent_id,
+                check_workspaces=False,  # plantillas del servidor: api/front/docs
+            )
+        )
     return created, skipped
 
 
@@ -149,6 +168,8 @@ def update_agent(db: Database, bus: EventBus | None, agent_id: str, patch: Agent
 
     merged = current.model_copy(update={k: getattr(patch, k) for k in changes})
     check_profile(merged.role_type, merged.permissions, merged.model, merged.limits)
+    if "permissions" in changes:
+        ensure_workspaces_exist(db, merged.permissions)
     if "name" in changes:
         other = repo.find_active_by_name(db, merged.name.strip())
         if other is not None and other.id != agent_id:
