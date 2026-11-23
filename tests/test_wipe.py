@@ -71,6 +71,19 @@ def test_el_backup_se_hace_antes_de_borrar(migrated_db: Database, tmp_path: Path
     assert count(migrated_db, "agents") == 4  # sin backup no se borra nada
 
 
+def test_sin_permisos_restringidos_aborta_antes_de_borrar(
+    migrated_db: Database, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed(migrated_db)
+    monkeypatch.setattr("app.security.fileperms.restrict_to_owner", lambda _p: False)
+    with pytest.raises(OSError, match="permisos"):
+        wipe_data(migrated_db, tmp_path / "bk")
+    assert count(migrated_db, "agents") == 4
+    assert not list((tmp_path / "bk").glob("*.json")) or all(
+        f.read_text(encoding="utf-8") == "" for f in (tmp_path / "bk").glob("*.json")
+    )
+
+
 def test_bd_ya_vacia_no_falla(migrated_db: Database, tmp_path: Path) -> None:
     counts = wipe_data(migrated_db, tmp_path / "bk")
     assert sum(counts.values()) == 0

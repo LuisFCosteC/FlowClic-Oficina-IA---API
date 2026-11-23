@@ -48,6 +48,8 @@ def backup_tables(db: Database, tables: tuple[str, ...], directory: Path) -> dic
     from app.security.fileperms import restrict_to_owner
 
     directory.mkdir(parents=True, exist_ok=True)
+    if not restrict_to_owner(directory):  # fallar en cerrado: sin permisos no hay backup ni borrado
+        raise OSError("No se pudieron restringir los permisos de la carpeta de backup")
     present = _existing_tables(db)
     counts: dict[str, int] = {}
     for table in tables:
@@ -55,6 +57,9 @@ def backup_tables(db: Database, tables: tuple[str, ...], directory: Path) -> dic
             continue
         rows = db.fetch_all(f"SELECT * FROM {table}")  # noqa: S608 - nombre de la lista fija
         path = directory / f"{table}.json"
+        path.touch()
+        if not restrict_to_owner(path):  # ANTES de escribir: el backup lleva textos cifrados
+            raise OSError(f"No se pudieron restringir los permisos de {path.name}")
         path.write_text(
             json.dumps(
                 [{k: _jsonable(v) for k, v in r.items()} for r in rows],
@@ -63,7 +68,6 @@ def backup_tables(db: Database, tables: tuple[str, ...], directory: Path) -> dic
             ),
             encoding="utf-8",
         )
-        restrict_to_owner(path)  # el backup puede llevar textos cifrados de claves
         counts[table] = len(rows)
     return counts
 
