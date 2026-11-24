@@ -1,12 +1,14 @@
 """Middlewares ASGI puros (sin BaseHTTPMiddleware: no interfieren con el streaming SSE)."""
 
 import logging
+import time
 import uuid
 
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.db.database import try_get_db
+from app.db.migrate import MIGRATE_HINT, is_behind
 from app.errors import error_response
 
 _ALWAYS_OPEN = ("/api/health", "/api/setup", "/api/docs", "/api/redoc", "/api/openapi.json")
@@ -25,6 +27,44 @@ class SetupModeMiddleware:
                 response = error_response(
                     503, "SETUP_REQUIRED", "La API necesita configuración inicial (modo SETUP)"
                 )
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+class MigrationGuardMiddleware:
+    """BD atrasada (faltan migraciones): 503 `MIGRATION_REQUIRED` en vez de un 500 (punto 10).
+
+    Se comprueba con una caché corta; al aplicar `python -m app.db.migrate` la API vuelve a
+    responder sola, sin reiniciar.
+    """
+
+    CACHE_SECONDS = 3.0
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+        self._checked_at = 0.0
+        self._db_id = 0
+        self._behind = False
+
+    def _is_behind(self) -> bool:
+        db = try_get_db()
+        if db is None:
+            return False
+        now = time.monotonic()
+        if id(db) != self._db_id or now - self._checked_at >= self.CACHE_SECONDS:
+            self._db_id, self._checked_at = id(db), now
+            try:
+                self._behind = is_behind(db)
+            except Exception:  # noqa: BLE001 - BD caída: que lo gestione cada ruta
+                self._behind = False
+        return self._behind
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            path: str = scope["path"]
+            if path.startswith("/api/") and not path.startswith(_ALWAYS_OPEN) and self._is_behind():
+                response = error_response(503, "MIGRATION_REQUIRED", MIGRATE_HINT)
                 await response(scope, receive, send)
                 return
         await self.app(scope, receive, send)

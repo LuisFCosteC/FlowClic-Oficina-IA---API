@@ -10,9 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from app.config import Settings, get_settings
 from app.db.database import Database, clear_db, set_db, try_get_db
+from app.db.migrate import MIGRATE_HINT, is_behind
 from app.errors import register_error_handlers
 from app.events.bus import EventBus, get_bus
-from app.middleware import SecurityMiddleware, SetupModeMiddleware
+from app.middleware import MigrationGuardMiddleware, SecurityMiddleware, SetupModeMiddleware
 from app.realtime.sse import SSEHub
 from app.routers import (
     admin_credentials,
@@ -84,6 +85,8 @@ def create_app(
                 opened_db = True
             else:
                 clear_db()
+            if opened is not None and is_behind(opened):
+                print(f"[MIGRACIONES] {MIGRATE_HINT}", flush=True)
             if not has_admin(try_get_db()):
                 gate.issue()  # modo SETUP: el código solo se imprime en la consola
         app.state.vault = active_vault
@@ -111,6 +114,7 @@ def create_app(
     app.dependency_overrides[get_bus] = lambda: the_bus  # rutas, SSE y tests: el mismo bus
     register_error_handlers(app)
 
+    app.add_middleware(MigrationGuardMiddleware)
     app.add_middleware(SetupModeMiddleware)
     app.add_middleware(  # el último en añadirse es el más externo: CORS envuelve al resto
         CORSMiddleware,

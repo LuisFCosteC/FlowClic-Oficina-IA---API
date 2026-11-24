@@ -8,7 +8,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.db.database import Database, DatabaseError
+from app.db.database import Database, DatabaseError, Row
 from app.db.sqlsplit import split_statements
 from app.util import now_iso
 
@@ -67,6 +67,31 @@ def schema_version(db: Database) -> int:
     except DatabaseError:
         return 0
     return int(row["v"]) if row and row["v"] is not None else 0
+
+
+def latest_version(directory: Path = MIGRATIONS_DIR) -> int:
+    """Mayor versión de los archivos de migración del código (0 si no hay)."""
+    return max(
+        (int(m.group(1)) for p in directory.iterdir() if (m := _FILE_RE.match(p.name))), default=0
+    )
+
+
+def is_behind(db: Database, directory: Path = MIGRATIONS_DIR) -> bool:
+    """True si la BD tiene menos migraciones aplicadas de las que trae el código."""
+    done = {int(r["version"]) for r in _applied_rows(db)}
+    return any(
+        int(m.group(1)) not in done for p in directory.iterdir() if (m := _FILE_RE.match(p.name))
+    )
+
+
+def _applied_rows(db: Database) -> list[Row]:
+    try:
+        return db.fetch_all("SELECT version FROM schema_migrations")
+    except DatabaseError:
+        return []
+
+
+MIGRATE_HINT = "Falta migrar: python -m app.db.migrate"
 
 
 def main() -> int:
