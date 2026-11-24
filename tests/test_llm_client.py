@@ -102,3 +102,66 @@ def test_errores_del_proveedor_son_genericos_y_sin_la_clave(
             tools=[],
         )
     assert "clave-super-secreta" not in str(info.value)
+
+
+def test_pick_model_elige_el_mas_reciente_y_estable_de_la_familia() -> None:
+    from app.orchestrator.llm import pick_model
+
+    names = [
+        "gemini-1.5-pro",
+        "gemini-2.5-pro",
+        "gemini-3-pro-preview",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro-exp",
+    ]
+    assert pick_model(names, "pro", "gemini-9-pro") == "gemini-2.5-pro"
+    assert pick_model(names, "flash", "x") == "gemini-2.5-flash"
+    assert pick_model(names, "pro", "gemini-2.5-pro") == "gemini-1.5-pro"
+    assert pick_model(["otra"], "pro", "x") is None
+
+
+def test_si_el_modelo_no_existe_se_descubre_uno_equivalente_y_se_recuerda() -> None:
+    from app.orchestrator import llm as llm_mod
+    from app.orchestrator.llm import LlmModelNotFound, LlmReply, complete_with_pool
+    from app.services.key_pool import AcquiredKey
+
+    class Pool:
+        def acquire(self, provider: str, model: str) -> AcquiredKey:
+            return AcquiredKey("k", provider, "k", model, "secreto")
+
+        def report_usage(self, *a: Any, **k: Any) -> None: ...
+
+    class Client:
+        def __init__(self) -> None:
+            self.seen: list[str] = []
+
+        def complete(self, **kw: Any) -> LlmReply:
+            self.seen.append(kw["api_model"])
+            if kw["api_model"] == "gemini-2.5-pro":
+                raise LlmModelNotFound(kw["api_model"])
+            return LlmReply("ok", [], 1, 1)
+
+        def discover(self, provider: str, secret: str, logical_id: str, bad: str) -> str:
+            return "gemini-3-pro"
+
+    llm_mod._OVERRIDES.clear()
+    c = Client()
+    r = complete_with_pool(
+        Pool(),  # type: ignore[arg-type]
+        c,  # type: ignore[arg-type]
+        model_ids=["gemini-pro"],
+        system="s",
+        turns=[Turn("user", "x")],
+        tools=[],
+    )
+    assert r.text == "ok" and c.seen == ["gemini-2.5-pro", "gemini-3-pro"]
+    complete_with_pool(
+        Pool(),  # type: ignore[arg-type]
+        c,  # type: ignore[arg-type]
+        model_ids=["gemini-pro"],
+        system="s",
+        turns=[Turn("user", "x")],
+        tools=[],
+    )
+    assert c.seen[-1] == "gemini-3-pro"  # recordado: no vuelve a probar el que no existe
+    llm_mod._OVERRIDES.clear()

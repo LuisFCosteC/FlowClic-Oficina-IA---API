@@ -6,6 +6,7 @@ proveedor. La salida del modelo es entrada NO confiable (la valida quien la usa)
 """
 
 import json
+import re
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -28,6 +29,14 @@ class LlmRateLimited(LlmError):
     def __init__(self, retry_after: float | None = None) -> None:
         super().__init__("El proveedor limitó la petición (429)")
         self.retry_after = retry_after
+
+
+class LlmModelNotFound(LlmError):
+    """El proveedor no conoce ese modelo (404) con esta clave."""
+
+    def __init__(self, api_model: str) -> None:
+        super().__init__(f"El modelo «{api_model}» no está disponible con tu clave")
+        self.api_model = api_model
 
 
 class LlmInvalidKey(LlmError):
@@ -80,6 +89,10 @@ class LlmClient(Protocol):
         tools: list[ToolDef],
     ) -> LlmReply: ...
 
+    def discover(self, provider: str, secret: str, logical_id: str, bad_model: str) -> str | None:
+        """Nombre real de un modelo equivalente que SÍ ofrezca la clave (o None)."""
+        ...
+
 
 Post = Callable[[str, dict[str, str], dict[str, Any]], tuple[int, dict[str, Any], float | None]]
 
@@ -105,7 +118,9 @@ def default_post(
         raise LlmError("No se pudo contactar con el proveedor") from None
 
 
-def _check_status(status: int, retry: float | None) -> None:
+def _check_status(status: int, retry: float | None, api_model: str = "") -> None:
+    if status == 404 and api_model:
+        raise LlmModelNotFound(api_model)
     if status == 429:
         raise LlmRateLimited(retry)
     if status in (401, 403):
@@ -148,6 +163,46 @@ class HttpLlmClient:
         if provider == "anthropic":
             return self._anthropic(api_model, secret, system, turns, tools)
         raise LlmError(f"Proveedor sin soporte en el orquestador: {provider}")
+
+    def discover(self, provider: str, secret: str, logical_id: str, bad_model: str) -> str | None:
+        try:
+            if provider == "google":
+                return self._discover_google(secret, logical_id, bad_model)
+            if provider == "anthropic":
+                return self._discover_anthropic(secret, logical_id, bad_model)
+        except (LlmError, OSError, ValueError):
+            return None
+        return None
+
+    def _get(self, url: str, headers: dict[str, str]) -> dict[str, Any]:
+        req = urllib.request.Request(url, headers=headers)  # noqa: S310 - URLs fijas https
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310
+                data: dict[str, Any] = json.loads(resp.read().decode("utf-8"))
+                return data
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            raise LlmError("No se pudo consultar los modelos del proveedor") from None
+
+    def _discover_google(self, secret: str, logical_id: str, bad_model: str) -> str | None:
+        data = self._get(
+            "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200",
+            {"x-goog-api-key": secret},
+        )
+        names = [
+            str(m.get("name", "")).removeprefix("models/")
+            for m in data.get("models", [])
+            if "generateContent" in (m.get("supportedGenerationMethods") or [])
+        ]
+        return pick_model(names, "pro" if "pro" in logical_id else "flash", bad_model)
+
+    def _discover_anthropic(self, secret: str, logical_id: str, bad_model: str) -> str | None:
+        data = self._get(
+            "https://api.anthropic.com/v1/models?limit=100",
+            {"x-api-key": secret, "anthropic-version": "2023-06-01"},
+        )
+        names = [str(m.get("id", "")) for m in data.get("data", [])]
+        family = next((f for f in ("opus", "sonnet", "haiku") if f in logical_id), "sonnet")
+        return pick_model(names, family, bad_model)
 
     # ── Gemini ───────────────────────────────────────────────────────────────────────────────
     def _google(
@@ -194,7 +249,7 @@ class HttpLlmClient:
         status, data, retry = self._post(url, {"x-goog-api-key": secret}, body)
         if status == 400 and not data:
             raise LlmInvalidKey(400)  # el proveedor responde 400 a una clave inválida
-        _check_status(status, retry)
+        _check_status(status, retry, model)
         cands = data.get("candidates") or []
         parts_out = (cands[0].get("content", {}).get("parts") if cands else None) or []
         text = "".join(str(p["text"]) for p in parts_out if "text" in p)
@@ -258,7 +313,7 @@ class HttpLlmClient:
             {"x-api-key": secret, "anthropic-version": "2023-06-01"},
             body,
         )
-        _check_status(status, retry)
+        _check_status(status, retry, model)
         blocks_out = data.get("content") or []
         text = "".join(str(b["text"]) for b in blocks_out if b.get("type") == "text")
         calls = [
@@ -273,6 +328,27 @@ class HttpLlmClient:
             int(usage.get("input_tokens") or 0),
             int(usage.get("output_tokens") or 0),
         )
+
+
+_UNSTABLE = ("preview", "exp", "latest", "tts", "image", "live", "thinking", "audio", "embed")
+# id lógico del catálogo → nombre real descubierto cuando el configurado no existe
+_OVERRIDES: dict[str, str] = {}
+
+
+def _version(name: str) -> tuple[int, ...]:
+    nums = re.findall(r"\d+(?:\.\d+)?", name)
+    out: list[int] = []
+    for n in nums[:2]:
+        out += [int(x) for x in n.split(".")]
+    return tuple(out)
+
+
+def pick_model(names: list[str], family: str, bad: str) -> str | None:
+    """El modelo más reciente y estable de una familia (pro/flash/opus/sonnet/haiku)."""
+    pool = [n for n in names if family in n and n != bad]
+    stable = [n for n in pool if not any(u in n for u in _UNSTABLE)]
+    ranked = sorted(stable or pool, key=lambda n: (_version(n), n), reverse=True)
+    return ranked[0] if ranked else None
 
 
 def provider_of(model_id: str) -> tuple[str, str] | None:
@@ -304,6 +380,7 @@ def complete_with_pool(
         if found is None:
             continue
         provider, api_model = found
+        api_model = _OVERRIDES.get(model_id, api_model)
         for _ in range(_MAX_KEYS_PER_CALL):
             try:
                 key = (
@@ -330,6 +407,18 @@ def complete_with_pool(
                 continue
             except LlmInvalidKey as exc:
                 pool.report_invalid(key.key_id, str(exc.status))
+                continue
+            except LlmModelNotFound as exc:
+                alt = client.discover(provider, key.secret, model_id, api_model)
+                if alt is None:
+                    raise
+                print(
+                    f"[ORQUESTADOR] El modelo «{exc.api_model}» no existe para tu clave: "
+                    f"uso «{alt}» para {model_id}.",
+                    flush=True,
+                )
+                _OVERRIDES[model_id] = alt
+                api_model = alt
                 continue
             pool.report_usage(key.key_id, model_id, reply.input_tokens, reply.output_tokens, 0.0)
             return reply
