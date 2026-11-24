@@ -720,6 +720,18 @@ pm run dev), rotar la cámara a 'Oficina de Sheldon' o activar la cámara de zon
   - Pendiente revisión Dev Senior.
   - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores, build en 433ms). Commit `2039d82` en `dev` del FRONT.
 
+- **MOD01 (Dev Junior, 2026-11-23, EN QA)** — Desacoplamiento de niveles y visualización de nombres reales de modelos:
+  - Eliminado en `src/api/mappers.ts` el mapeo forzado de modelos a niveles (`TIER_BY_MODEL`, `MODEL_ID_BY_TIER` y `tierFromModel`).
+  - Mapeado el campo `model` real del agente (`a.model.primary`), del ticket y de las propuestas.
+  - Creado módulo `src/utils/models.ts` con caché dinámica y consulta a `GET /api/models` (`getModelDisplayName`, `initModelCatalog`, `setModelCatalog`), con catálogo inicial y fallback para mantener consistencia.
+  - Actualizadas las vistas para mostrar el nombre real del modelo del catálogo:
+    - **Administración → Agentes**: En la columna "Modelo", los agentes muestran el nombre real de su modelo principal (ej. Sheldon sale como "Claude Sonnet 5.5" en vez de "Sonnet · Pro").
+    - **Kanban**: En las tarjetas y en la vista tabular de tareas, muestra el nombre real del modelo del ticket o del agente asignado.
+    - **Cerebro**: En la tabla de agentes activos y en las tarjetas de propuestas de Sheldon, muestra el nombre real del modelo.
+  - Probar: Ir a Administración → pestaña "Agentes" y verificar que Sheldon muestra "Claude Sonnet 5.5" en lugar de "Sonnet · Pro"; revisar la columna "Modelo" del resto de agentes; ir a Kanban y verificar que las tareas asignadas muestran el nombre real del modelo; ir a Cerebro y revisar la tabla inferior de agentes y las propuestas; verificar que si la API responde a `GET /api/models`, se usan sus etiquetas dinámicamente.
+  - Pendiente revisión Dev Senior.
+  - `npm run lint` y `npm run build` pasan al 100% en verde (0 errores de tipos, build en 6.75s). Commit `e83935c` en `dev` del FRONT.
+
 
 - **A05 (Dev Senior, 2026-11-23, EN QA)** — Contratos para el Junior (camelCase; la conexión vive en la bóveda cifrada, no en `.env`; sin auth hasta S09):
   - `GET /api/admin/db` → `{"mode":"local"|"remote","host":"uno.db","connected":true,"schemaVersion":8,"hasToken":false,"lastBackupAt":null|"2026-11-23T14:18:10.000Z"}`. `host` es solo el nombre de archivo (local) o el hostname (remoto): nunca la URL completa, la ruta ni el token. 503 `ENCRYPTION_UNAVAILABLE` sin bóveda.
