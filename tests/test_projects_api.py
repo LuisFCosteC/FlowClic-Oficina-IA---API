@@ -62,7 +62,8 @@ def test_archivar_restaurar_y_listado(client: TestClient, events: list[DomainEve
 
 def test_no_se_archiva_con_tickets_activos(client: TestClient) -> None:
     mk(client)
-    t = client.post("/api/tickets", json={"title": "T", "projectId": "web"})
+    client.post("/api/agents", json={"name": "Sheldon", "role": "CTO", "roleType": "CTO"})
+    t = client.post("/api/tickets", json={"title": "T", "requirement": "R", "projectId": "web"})
     assert t.status_code == 201
     assert t.json()["projectId"] == "web" and t.json()["project"] == "Web"
     r = client.post(f"{P}/web/archive")
@@ -71,11 +72,17 @@ def test_no_se_archiva_con_tickets_activos(client: TestClient) -> None:
 
 
 def test_ticket_con_proyecto_inexistente_o_archivado_400(client: TestClient) -> None:
-    assert client.post("/api/tickets", json={"title": "T", "projectId": "no"}).status_code == 400
+    client.post("/api/agents", json={"name": "Sheldon", "role": "CTO", "roleType": "CTO"})
+
+    def post(**kw: str) -> int:
+        body = {"title": "T", "requirement": "R", **kw}
+        return client.post("/api/tickets", json=body).status_code
+
+    assert post(projectId="no") == 400
     mk(client)
     client.post(f"{P}/web/archive")
-    assert client.post("/api/tickets", json={"title": "T", "projectId": "web"}).status_code == 400
-    assert client.post("/api/tickets", json={"title": "T", "project": "web"}).status_code == 400
+    assert post(projectId="web") == 400
+    assert post(project="web") == 400  # el texto libre ya no existe
 
 
 def test_workspace_con_proyecto_y_kind(client: TestClient, tmp_path: Path) -> None:

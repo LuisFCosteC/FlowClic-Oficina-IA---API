@@ -7,7 +7,7 @@
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_serializer
 from pydantic.alias_generators import to_camel
 
 AgentStatus = Literal["IDLE", "WORKING", "REVIEW", "BLOCKED", "SLEEP_QUOTA"]
@@ -159,6 +159,7 @@ class Agent(CamelModel):
     is_cto: bool
     current_task: str | None
     project: str | None
+    reports_to: str | None = None  # id del agente al que reporta; null = el CEO
     consecutive_failures: int
     created_at: str
     updated_at: str
@@ -188,6 +189,7 @@ class AgentCreate(StrictInput):
         )
     )
     project: ProjectName | None = None
+    reports_to: Ref | None = None
 
 
 class AgentUpdate(StrictInput):
@@ -205,6 +207,7 @@ class AgentUpdate(StrictInput):
     model: ModelConfig | None = None
     limits: Limits | None = None
     project: ProjectName | None = None
+    reports_to: Ref | None = None
 
 
 class AgentStatusBody(StrictInput):
@@ -213,12 +216,16 @@ class AgentStatusBody(StrictInput):
 
 
 # ── Tickets ──────────────────────────────────────────────────────────────────────────────────
+TicketKind = Literal["REQUEST", "TASK"]
+UNDEFINED_LABEL = "Por definir"
+
+
 class Ticket(CamelModel):
     id: str
     title: str
     description: str
     status: TicketStatus
-    priority: Priority
+    priority: Priority | None = None  # null = "Por definir" (lo decide el CTO)
     assigned_agent_id: str | None
     project_id: str | None = None
     project: str | None = None  # nombre del proyecto (solo lectura, derivado de project_id)
@@ -232,24 +239,44 @@ class Ticket(CamelModel):
     actions: list[str] = Field(default_factory=list)
     restrictions: list[str] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)
-    model: str | None = None
+    model: str | None = None  # null = "Por definir"
+    kind: TicketKind = "TASK"
+    parent_ticket_id: str | None = None
+    requirement: str = ""
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def priority_label(self) -> str:
+        return UNDEFINED_LABEL if self.priority is None else self.priority
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def model_label(self) -> str:
+        return UNDEFINED_LABEL if self.model is None else self.model
 
 
-class TicketCreate(StrictInput):
+class RequestCreate(StrictInput):
+    """Pedido del CEO (REQ01): lo recibe el CTO; prioridad y modelo los decide él."""
+
     title: Title
-    description: LongText | None = None
-    status: TicketStatus | None = None
-    priority: Priority | None = None
-    assigned_agent_id: Ref | None = None
-    project_id: Ref | None = None
-    model_tier: ModelTier | None = None
-    estimated_cost_usd: Money | None = None
-    objective: LongText | None = None
-    acceptance_criteria: ProfileList = Field(default_factory=list)
+    requirement: Annotated[str, Field(min_length=1, max_length=5000)]
+    project_id: ProjectId
+
+
+class TaskCreate(StrictInput):
+    """Subtarea (kind TASK) de un pedido: la crean el CTO o Leonard (REQ01)."""
+
+    parent_ticket_id: Ref
+    title: Title
+    objective: Annotated[str, Field(min_length=1, max_length=5000)]
+    acceptance_criteria: Annotated[list[ListItem], Field(min_length=1, max_length=40)]
     actions: ProfileList = Field(default_factory=list)
     restrictions: ProfileList = Field(default_factory=list)
     dependencies: ProfileList = Field(default_factory=list)
-    model: Ref | None = None
+    assigned_agent_id: Ref
+    model: Ref
+    priority: Priority
+    acting_agent_id: Ref | None = None
 
 
 class TicketUpdate(StrictInput):
@@ -441,7 +468,7 @@ class TicketBrief(CamelModel):
     id: str
     title: str
     status: TicketStatus
-    priority: Priority
+    priority: Priority | None
     description: str
     since_seconds: int
 

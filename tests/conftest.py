@@ -97,3 +97,25 @@ def kclient(migrated_db: Database, master_key: str) -> Iterator[TestClient]:
         create_app(settings, migrated_db), base_url="http://localhost", client=("127.0.0.1", 50000)
     ) as c:
         yield c
+
+
+def make_ticket(**fields: object) -> dict[str, object]:
+    """Crea un ticket directamente por el servicio (sin las reglas de REQ01) para probar el flujo.
+
+    Usa la BD activa de la app (la del fixture `client`).
+    """
+    from app.db.database import get_db
+    from app.events.bus import get_bus
+    from app.services import tickets_service
+
+    args: dict[str, object] = {
+        "title": "Tarea",
+        "kind": "TASK",
+        "priority": "MEDIUM",
+        "assigned_agent_id": None,
+        "project_id": None,
+        "model": None,
+    }
+    args.update(fields)
+    ticket = tickets_service.new_ticket(get_db(), get_bus(), **args)  # type: ignore[arg-type]
+    return tickets_service.ticket_payload(ticket)

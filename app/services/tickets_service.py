@@ -8,9 +8,15 @@ import json
 from app.db.database import Database
 from app.domain.agent_policy import GLOBAL_RESTRICTIONS
 from app.domain.models_catalog import MODEL_IDS
-from app.domain.schemas import Agent, Ticket, TicketCreate, TicketTransitionBody
+from app.domain.schemas import (
+    Agent,
+    RequestCreate,
+    TaskCreate,
+    Ticket,
+    TicketTransitionBody,
+)
 from app.domain.ticket_flow import PROTECTED_AGENT_STATUSES, agent_status_for, can_transition
-from app.errors import AppError, not_found, validation_error
+from app.errors import AppError, conflict, not_found, validation_error
 from app.events.bus import EventBus
 from app.repositories import agents_repo
 from app.repositories import tickets_repo as repo
@@ -54,44 +60,68 @@ def get_ticket_or_404(db: Database, ticket_id: str) -> Ticket:
     return ticket
 
 
-def create_ticket(db: Database, bus: EventBus | None, data: TicketCreate) -> Ticket:
-    if data.status not in (None, "PENDING"):
-        raise validation_error("Los tickets nuevos empiezan en PENDIENTE; muévelos después")
-    if data.assigned_agent_id is not None:
-        agent = agents_repo.get_agent(db, data.assigned_agent_id)
+def new_ticket(
+    db: Database,
+    bus: EventBus | None,
+    *,
+    title: str,
+    kind: str,
+    priority: str | None,
+    assigned_agent_id: str | None,
+    project_id: str | None,
+    model: str | None,
+    description: str = "",
+    objective: str = "",
+    acceptance_criteria: list[str] | None = None,
+    actions: list[str] | None = None,
+    restrictions: list[str] | None = None,
+    dependencies: list[str] | None = None,
+    parent_ticket_id: str | None = None,
+    requirement: str = "",
+    model_tier: str = "sonnet_pro",
+    estimated_cost_usd: float = 0,
+) -> Ticket:
+    """Alta común (siempre PENDIENTE). Valida agente, proyecto y modelo; emite `ticket.created`."""
+    if assigned_agent_id is not None:
+        agent = agents_repo.get_agent(db, assigned_agent_id)
         if agent is None or agent.archived_at is not None:
             raise validation_error("El agente asignado no existe o está archivado")
-    title = data.title.strip()
-    if not title:
+    clean_title = title.strip()
+    if not clean_title:
         raise validation_error("El título no puede estar vacío")
-    if data.project_id is not None:
-        projects_service.require_active(db, data.project_id)
-    if data.model is not None and data.model not in MODEL_IDS:
+    if project_id is not None:
+        projects_service.require_active(db, project_id)
+    if model is not None and model not in MODEL_IDS:
         raise validation_error(
-            f"model: modelo desconocido: {data.model}",
-            [{"path": "model", "message": f"modelo desconocido: {data.model}"}],
+            f"model: modelo desconocido: {model}",
+            [{"path": "model", "message": f"modelo desconocido: {model}"}],
         )
     now = now_iso()
     row = db.fetch_one("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM tickets")
-    ticket = Ticket(
-        id=new_id(),
-        title=title,
-        description=(data.description or "").strip(),
-        status="PENDING",
-        priority=data.priority or "MEDIUM",
-        assigned_agent_id=data.assigned_agent_id,
-        project_id=data.project_id,
-        model_tier=data.model_tier or "sonnet_pro",
-        estimated_cost_usd=data.estimated_cost_usd or 0,
-        position=int(row["p"]) if row else 0,
-        created_at=now,
-        updated_at=now,
-        objective=(data.objective or "").strip(),
-        acceptance_criteria=_clean_list(data.acceptance_criteria),
-        actions=_clean_list(data.actions),
-        restrictions=_task_restrictions(data.restrictions),
-        dependencies=_clean_list(data.dependencies),
-        model=data.model,
+    ticket = Ticket.model_validate(
+        {
+            "id": new_id(),
+            "title": clean_title,
+            "description": description.strip(),
+            "status": "PENDING",
+            "priority": priority,
+            "assigned_agent_id": assigned_agent_id,
+            "project_id": project_id,
+            "model_tier": model_tier,
+            "estimated_cost_usd": estimated_cost_usd,
+            "position": int(row["p"]) if row else 0,
+            "created_at": now,
+            "updated_at": now,
+            "objective": objective.strip(),
+            "acceptance_criteria": _clean_list(acceptance_criteria or []),
+            "actions": _clean_list(actions or []),
+            "restrictions": _task_restrictions(restrictions or []),
+            "dependencies": _clean_list(dependencies or []),
+            "model": model,
+            "kind": kind,
+            "parent_ticket_id": parent_ticket_id,
+            "requirement": requirement.strip(),
+        }
     )
     with db.transaction() as tx:
         repo.insert_ticket(tx, ticket)
@@ -102,13 +132,79 @@ def create_ticket(db: Database, bus: EventBus | None, data: TicketCreate) -> Tic
             type_="CREATED",
             from_value=None,
             to_value="PENDING",
-            payload="{}",
+            payload=json.dumps({"kind": kind}),
             now=now,
         )
     created = get_ticket_or_404(db, ticket.id)  # con el nombre del proyecto
     if bus is not None:
         bus.emit("ticket.created", ticket_payload(created))
     return created
+
+
+def active_cto(db: Database) -> Agent:
+    """El único CTO activo. 409 si no hay ninguno o hay más de uno."""
+    ctos = [a for a in agents_repo.list_agents(db) if a.role_type == "CTO"]
+    if not ctos:
+        raise conflict("Crea primero un agente con rol CTO")
+    if len(ctos) > 1:
+        raise conflict("Hay más de un agente CTO activo: deja solo uno")
+    return ctos[0]
+
+
+def create_request(db: Database, bus: EventBus | None, body: RequestCreate) -> Ticket:
+    """Pedido del CEO (REQ01): lo recibe el CTO; prioridad y modelo quedan "Por definir"."""
+    projects_service.require_active(db, body.project_id)
+    cto = active_cto(db)
+    return new_ticket(
+        db,
+        bus,
+        title=body.title,
+        kind="REQUEST",
+        priority=None,
+        assigned_agent_id=cto.id,
+        project_id=body.project_id,
+        model=None,
+        description=body.requirement,
+        requirement=body.requirement,
+    )
+
+
+def _check_can_create_tasks(db: Database, acting_agent_id: str) -> None:
+    """Subtareas: las crean el CTO o Leonard (DEV_BACKEND) o un agente con `tickets.create`."""
+    agent = agents_repo.get_agent(db, acting_agent_id)
+    if agent is None or agent.archived_at is not None:
+        raise validation_error("actingAgentId: el agente no existe o está archivado")
+    if agent.role_type not in ("CTO", "DEV_BACKEND") and "tickets.create" not in (
+        agent.permissions.actions
+    ):
+        raise AppError("FORBIDDEN", "Solo el CTO o Leonard pueden crear subtareas de un pedido")
+
+
+def create_task(db: Database, bus: EventBus | None, body: TaskCreate) -> Ticket:
+    """Subtarea (kind TASK) de un pedido (REQ01). Hasta GM05 también se crea por API en pruebas."""
+    if body.acting_agent_id is not None:
+        _check_can_create_tasks(db, body.acting_agent_id)
+    parent = get_ticket_or_404(db, body.parent_ticket_id)
+    if parent.kind != "REQUEST":
+        raise validation_error("parentTicketId: debe ser un pedido (kind REQUEST)")
+    if parent.status == "DONE":
+        raise conflict("El pedido ya está HECHO: no admite más subtareas")
+    return new_ticket(
+        db,
+        bus,
+        title=body.title,
+        kind="TASK",
+        priority=body.priority,
+        assigned_agent_id=body.assigned_agent_id,
+        project_id=parent.project_id,
+        model=body.model,
+        objective=body.objective,
+        acceptance_criteria=body.acceptance_criteria,
+        actions=body.actions,
+        restrictions=body.restrictions,
+        dependencies=body.dependencies,
+        parent_ticket_id=parent.id,
+    )
 
 
 def _apply_agent_effect(db: Database, ticket: Ticket, to: str, now: str) -> Agent | None:

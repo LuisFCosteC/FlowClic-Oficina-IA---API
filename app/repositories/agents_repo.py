@@ -33,6 +33,7 @@ UPDATABLE = {
     "is_cto",
     "current_task",
     "project",
+    "reports_to",
 }
 
 
@@ -56,6 +57,7 @@ def row_to_agent(r: Row) -> Agent:
             "is_cto": bool(r["is_cto"]),
             "current_task": r["current_task"],
             "project": r["project"],
+            "reports_to": r["reports_to"],
             "consecutive_failures": r["consecutive_failures"],
             "created_at": r["created_at"],
             "updated_at": r["updated_at"],
@@ -94,8 +96,8 @@ def insert_agent(db: Database, a: Agent) -> None:
     db.execute(
         "INSERT INTO agents (id, name, character, role, role_type, status, avatar, functions,"
         " rules, restrictions, permissions, model, limits, system_prompt, is_cto, current_task,"
-        " project, consecutive_failures, created_at, updated_at, archived_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " project, consecutive_failures, created_at, updated_at, archived_at, reports_to)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             a.id,
             a.name,
@@ -118,6 +120,7 @@ def insert_agent(db: Database, a: Agent) -> None:
             a.created_at,
             a.updated_at,
             a.archived_at,
+            a.reports_to,
         ),
     )
 
@@ -178,6 +181,22 @@ def count_open_tickets(db: Database, agent_id: str) -> int:
         (agent_id,),
     )
     return int(row["n"]) if row else 0
+
+
+def count_active_with_role(db: Database, role_type: str, exclude_id: str | None = None) -> int:
+    row = db.fetch_one(
+        "SELECT COUNT(*) AS n FROM agents WHERE role_type = ? AND archived_at IS NULL AND id <> ?",
+        (role_type, exclude_id or ""),
+    )
+    return int(row["n"]) if row else 0
+
+
+def list_active_subordinates(db: Database, agent_id: str) -> list[Agent]:
+    rows = db.fetch_all(
+        "SELECT * FROM agents WHERE reports_to = ? AND archived_at IS NULL ORDER BY name",
+        (agent_id,),
+    )
+    return [row_to_agent(r) for r in rows]
 
 
 def count_pending_approvals(db: Database, agent_id: str) -> int:

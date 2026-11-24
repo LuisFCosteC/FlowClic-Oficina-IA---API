@@ -34,6 +34,9 @@ def row_to_ticket(r: Row) -> Ticket:
             "restrictions": json.loads(r["restrictions"]),
             "dependencies": json.loads(r["dependencies"]),
             "model": r["model"],
+            "kind": r["kind"],
+            "parent_ticket_id": r["parent_ticket_id"],
+            "requirement": r["requirement"],
         }
     )
 
@@ -60,8 +63,9 @@ def insert_ticket(db: Database, t: Ticket) -> None:
     db.execute(
         "INSERT INTO tickets (id, title, description, status, priority, assigned_agent_id,"
         " project_id, model_tier, estimated_cost_usd, position, created_at, updated_at,"
-        " objective, acceptance_criteria, actions, restrictions, dependencies, model)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " objective, acceptance_criteria, actions, restrictions, dependencies, model, kind,"
+        " parent_ticket_id, requirement)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             t.id,
             t.title,
@@ -81,6 +85,9 @@ def insert_ticket(db: Database, t: Ticket) -> None:
             json.dumps(t.restrictions, ensure_ascii=False),
             json.dumps(t.dependencies, ensure_ascii=False),
             t.model,
+            t.kind,
+            t.parent_ticket_id,
+            t.requirement,
         ),
     )
 

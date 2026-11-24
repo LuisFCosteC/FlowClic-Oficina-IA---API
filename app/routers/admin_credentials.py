@@ -22,17 +22,17 @@ _MESSAGE = (
 
 @router.api_route("/credentials", methods=["GET", "POST"], include_in_schema=False)
 @router.api_route(
-    "/agents/{agent_id}/credentials", methods=["GET", "POST"], summary="Retirada (410 Gone)"
+    "/agents/{agent_id}/credentials", methods=["GET", "POST"], include_in_schema=False
 )
 @router.api_route(
     "/agents/{agent_id}/credentials/{cred_id}",
     methods=["GET", "PUT", "PATCH", "DELETE"],
-    summary="Retirada (410 Gone)",
+    include_in_schema=False,
 )
 @router.api_route(
     "/agents/{agent_id}/credentials/{cred_id}/rotate",
     methods=["POST"],
-    summary="Retirada (410 Gone)",
+    include_in_schema=False,
 )
 def gone() -> None:
     raise AppError("GONE", _MESSAGE)

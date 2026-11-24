@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from app.db.database import Database, get_db
-from app.domain.schemas import Ticket, TicketCreate, TicketTransitionBody
+from app.domain.schemas import RequestCreate, TaskCreate, Ticket, TicketTransitionBody
 from app.errors import ErrorResponse
 from app.events.bus import EventBus, get_bus
 from app.repositories import tickets_repo
@@ -38,9 +38,16 @@ def get_ticket(ticket_id: str, db: Db) -> Ticket:
     return tickets_service.get_ticket_or_404(db, ticket_id)
 
 
-@router.post("", status_code=201, summary="Crear un ticket (empieza en PENDIENTE)")
-def create_ticket(body: TicketCreate, db: Db, bus: Bus) -> Ticket:
-    return tickets_service.create_ticket(db, bus, body)
+@router.post(
+    "",
+    status_code=201,
+    summary="Crear un pedido del CEO o una subtarea (si lleva parentTicketId)",
+    responses={409: {"model": ErrorResponse, "description": "Falta el CTO o hay más de uno"}},
+)
+def create_ticket(body: RequestCreate | TaskCreate, db: Db, bus: Bus) -> Ticket:
+    if isinstance(body, RequestCreate):
+        return tickets_service.create_request(db, bus, body)
+    return tickets_service.create_task(db, bus, body)
 
 
 @router.post(

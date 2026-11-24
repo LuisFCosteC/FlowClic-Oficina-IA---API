@@ -1,6 +1,7 @@
 """Tickets: alta y transiciones del grafo de PLAN §19.4 con efecto en el agente."""
 
 import pytest
+from conftest import make_ticket
 from fastapi.testclient import TestClient
 
 from app.db.database import Database
@@ -14,12 +15,7 @@ def _agent(c: TestClient, name: str = "Leonard") -> str:
 
 
 def _ticket(c: TestClient, agent_id: str | None = None, title: str = "Login") -> dict:
-    body: dict[str, object] = {"title": title}
-    if agent_id:
-        body["assignedAgentId"] = agent_id
-    r = c.post("/api/tickets", json=body)
-    assert r.status_code == 201, r.text
-    return r.json()
+    return make_ticket(title=title, assigned_agent_id=agent_id)
 
 
 def _move(c: TestClient, tid: str, to: str):
@@ -56,10 +52,11 @@ def test_create_starts_pending_with_event(client: TestClient, migrated_db: Datab
     assert [e["type"] for e in ev] == ["CREATED"]
 
 
-def test_create_rejects_other_status_and_unknown_agent(client: TestClient) -> None:
+def test_create_rejects_free_form_tickets(client: TestClient) -> None:
+    # REQ01: ya no se crean tickets con campos libres; solo pedidos y subtareas
     assert client.post("/api/tickets", json={"title": "x", "status": "DONE"}).status_code == 400
-    r = client.post("/api/tickets", json={"title": "x", "assignedAgentId": "nadie"})
-    assert r.status_code == 400
+    bad = client.post("/api/tickets", json={"title": "x", "assignedAgentId": "n"})
+    assert bad.status_code == 400
     assert client.post("/api/tickets", json={"title": ""}).status_code == 400
 
 

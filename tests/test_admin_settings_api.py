@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from conftest import make_ticket
 from fastapi.testclient import TestClient
 
 from app.db.database import Database
@@ -34,9 +35,7 @@ def _agent(c: TestClient, name: str = "Leonard") -> dict[str, Any]:
 
 
 def _ticket(c: TestClient, agent_id: str, title: str = "T") -> str:
-    r = c.post("/api/tickets", json={"title": title, "assignedAgentId": agent_id})
-    assert r.status_code == 201, r.text
-    return str(r.json()["id"])
+    return str(make_ticket(title=title, assigned_agent_id=agent_id)["id"])
 
 
 def _move(c: TestClient, tid: str, to: str) -> Any:

@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from conftest import make_ticket
 from fastapi.testclient import TestClient
 
 from app.db.database import Database
@@ -33,9 +34,7 @@ def _agent(c: TestClient, name: str = "Leonard") -> dict[str, Any]:
 
 
 def _ticket(c: TestClient, agent_id: str, title: str = "T") -> str:
-    r = c.post("/api/tickets", json={"title": title, "assignedAgentId": agent_id})
-    assert r.status_code == 201, r.text
-    return str(r.json()["id"])
+    return str(make_ticket(title=title, assigned_agent_id=agent_id)["id"])
 
 
 def _move(c: TestClient, tid: str, to: str) -> Any:
@@ -69,7 +68,7 @@ def test_max_active_tickets_al_pasar_a_en_curso(client: TestClient) -> None:
 
 def test_tickets_sin_agente_no_cuentan_para_el_limite(client: TestClient) -> None:
     _limits(client, maxActiveTicketsPerAgent=1)
-    tid = client.post("/api/tickets", json={"title": "x"}).json()["id"]
+    tid = make_ticket(title="x")["id"]
     assert _move(client, tid, "IN_PROGRESS").status_code == 200
 
 

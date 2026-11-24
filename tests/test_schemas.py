@@ -16,8 +16,8 @@ from app.domain.schemas import (
     Limits,
     ModelConfig,
     Permissions,
+    RequestCreate,
     TicketAssignBody,
-    TicketCreate,
     TicketUpdate,
 )
 
@@ -75,7 +75,9 @@ def test_la_entrada_rechaza_campos_desconocidos() -> None:
     with pytest.raises(ValidationError):
         AgentCreate.model_validate({"name": "A", "role": "r", "isAdmin": True})
     with pytest.raises(ValidationError):
-        TicketCreate.model_validate({"title": "T", "id": "x"})
+        RequestCreate.model_validate(
+            {"title": "T", "requirement": "r", "projectId": "web", "id": "x"}
+        )
 
 
 def test_agent_update_no_admite_status() -> None:
@@ -95,7 +97,9 @@ def test_estados_invalidos_se_rechazan(bad: str) -> None:
     with pytest.raises(ValidationError):
         AgentStatusBody.model_validate({"status": bad})
     with pytest.raises(ValidationError):
-        TicketCreate.model_validate({"title": "T", "status": bad})
+        RequestCreate.model_validate(
+            {"title": "T", "requirement": "r", "projectId": "web", "status": bad}
+        )
 
 
 def test_los_cinco_estados_de_agente_son_validos() -> None:
@@ -109,7 +113,7 @@ def test_limites_de_longitud_y_rangos() -> None:
     with pytest.raises(ValidationError):
         AgentCreate.model_validate({"name": "", "role": "r"})
     with pytest.raises(ValidationError):
-        TicketCreate.model_validate({"title": "T", "estimatedCostUsd": -1})
+        RequestCreate.model_validate({"title": "T" * 201, "requirement": "r", "projectId": "w"})
     with pytest.raises(ValidationError):
         TicketUpdate.model_validate({"position": -1})
     with pytest.raises(ValidationError):
