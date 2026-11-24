@@ -1,5 +1,6 @@
 """Fábrica de la aplicación FastAPI."""
 
+import asyncio
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -100,7 +101,14 @@ def create_app(
                 gate.issue()  # modo SETUP: el código solo se imprime en la consola
         app.state.vault = active_vault
         sse_hub.start()
+        orch_task = None
+        if cfg.orchestrator == "llm" and cfg.node_env != "test":
+            from app.orchestrator.service import run_forever
+
+            orch_task = asyncio.create_task(run_forever(cfg, the_bus))
         yield
+        if orch_task is not None:
+            orch_task.cancel()
         sse_hub.stop()
         if opened_db and (current := try_get_db()) is not None:
             current.close()

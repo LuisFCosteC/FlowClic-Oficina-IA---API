@@ -117,3 +117,27 @@ def list_ticket_event_entries(
             )
         )
     return out
+
+
+def list_for_ticket(db: Database, ticket_id: str, limit: int = 30) -> list[Message]:
+    """Mensajes de un ticket (informes, revisiones, órdenes), del más viejo al más nuevo."""
+    rows = db.fetch_all(
+        "SELECT * FROM agent_messages WHERE ticket_id = ?"
+        " ORDER BY created_at DESC, id DESC LIMIT ?",
+        (ticket_id, limit),
+    )
+    return [row_to_message(r) for r in reversed(rows)]
+
+
+def list_pending_human(db: Database, limit: int = 20) -> list[Message]:
+    """Órdenes y preguntas del CEO que aún no se han atendido (las más viejas primero)."""
+    rows = db.fetch_all(
+        "SELECT * FROM agent_messages WHERE author_type = 'HUMAN' AND status = 'PENDING'"
+        " ORDER BY created_at, id LIMIT ?",
+        (limit,),
+    )
+    return [row_to_message(r) for r in rows]
+
+
+def set_status(db: Database, message_id: str, status: str) -> None:
+    db.execute("UPDATE agent_messages SET status = ? WHERE id = ?", (status, message_id))

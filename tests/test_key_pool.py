@@ -81,7 +81,9 @@ def test_agotar_en_pro_no_agota_en_flash(
     migrated_db: Database, box: SecretBox, pool: KeyPool
 ) -> None:
     a = add(migrated_db, box, "a", "secret-aaaa-0001")
-    pool.report_exhausted(a, "gemini-pro")
+    # has_usable_key y get_view usan la hora real y el pool el reloj falso: reset en el futuro real
+    later = datetime.now(UTC) + timedelta(days=1)
+    pool.report_exhausted(a, "gemini-pro", reset_at=later)
     assert pool.acquire("google", "gemini-flash").key_id == a
     with pytest.raises(AppError):
         pool.acquire("google", "gemini-pro")
@@ -90,7 +92,7 @@ def test_agotar_en_pro_no_agota_en_flash(
     view = key_service.get_view(migrated_db, a)
     assert view.computed_status == "ACTIVE"  # solo Pro agotada
     assert [e.model for e in view.exhausted_models] == ["gemini-pro"]
-    pool.report_exhausted(a, "gemini-flash")
+    pool.report_exhausted(a, "gemini-flash", reset_at=later)
     view = key_service.get_view(migrated_db, a)
     assert view.computed_status == "EXHAUSTED" and view.status_label.startswith("Agotada hasta ")
 

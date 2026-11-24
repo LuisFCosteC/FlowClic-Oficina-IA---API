@@ -22,7 +22,7 @@ def test_valores_validos_exportan_objeto_tipado() -> None:
     assert s.port == 4010
     assert s.host == "127.0.0.1"
     assert s.turso_auth_token is None
-    assert s.orchestrator == "noop"
+    assert s.orchestrator == "llm"
     assert s.docs_active is True
 
 

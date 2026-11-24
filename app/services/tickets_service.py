@@ -287,8 +287,15 @@ def authorize_agent_transition(db: Database, agent_id: str, ticket: Ticket, to: 
 
 
 def transition(
-    db: Database, bus: EventBus | None, ticket_id: str, body: TicketTransitionBody
+    db: Database,
+    bus: EventBus | None,
+    ticket_id: str,
+    body: TicketTransitionBody,
+    *,
+    as_agent: str | None = None,
 ) -> Ticket:
+    """Mueve un ticket por el grafo. `as_agent` es SOLO para el orquestador: registra al agente
+    como actor sin evaluar sus `ticketTransitions` (el flujo mecánico lo conduce el sistema)."""
     ticket = get_ticket_or_404(db, ticket_id)
     decision = can_transition(ticket.status, body.to)
     if decision == "NOOP":
@@ -299,7 +306,9 @@ def transition(
             f"No se puede pasar de {STATUS_LABEL[ticket.status]} a {STATUS_LABEL[body.to]}",
         )
     actor = "human"
-    if body.acting_agent_id is not None:
+    if as_agent is not None:
+        actor = as_agent
+    elif body.acting_agent_id is not None:
         acting = authorize_agent_transition(db, body.acting_agent_id, ticket, body.to)
         actor = acting.id
     if body.to == "DONE" and repo.count_pending_gates(db, ticket_id) > 0:
