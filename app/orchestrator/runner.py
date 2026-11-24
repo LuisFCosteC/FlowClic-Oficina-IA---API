@@ -42,7 +42,7 @@ from app.orchestrator.llm import (
     complete_with_pool,
 )
 from app.repositories import agents_repo, messages_repo, projects_repo, tickets_repo
-from app.services import tickets_service
+from app.services import presence_service, tickets_service
 from app.services.key_pool import KeyPool
 from app.util import new_id, now_iso
 
@@ -111,6 +111,7 @@ class Orchestrator:
         self._fails: dict[str, int] = {}
         self._notified: set[str] = set()
         self.last_error: str | None = None
+        self._paused = False
         self._started = datetime.now(UTC)
 
     # ── bucle ────────────────────────────────────────────────────────────────────────────────
@@ -119,6 +120,12 @@ class Orchestrator:
         if not self._lock.acquire(blocking=False):
             return 0
         try:
+            if presence_service.get_mode(self._db) != "work":
+                self._paused = True
+                return 0  # pausa global (desayuno, almuerzo, dormir): nadie avanza, nada se pierde
+            if self._paused:
+                self._paused = False
+                presence_service.settle_all(self._db, self._bus)
             done = self._answer_messages()
             for ticket in tickets_repo.list_tickets(self._db):
                 if ticket.status in ("DONE", "IN_REVIEW"):
@@ -259,31 +266,11 @@ class Orchestrator:
     # ── estado visible del agente (laboratorio / oficina de Sheldon / descanso) ───────────────
     def _set_agent(self, agent_id: str, status: str, task: str | None) -> None:
         agent = agents_repo.get_agent(self._db, agent_id)
-        if agent is None or agent.archived_at is not None:
-            return
-        if agent.status in ("BLOCKED", "SLEEP_QUOTA") or (
-            agent.status == status and agent.current_task == task
-        ):
-            return
-        agents_repo.set_status(self._db, agent_id, status, task, now_iso())  # type: ignore[arg-type]
-        updated = agents_repo.get_agent(self._db, agent_id)
-        if self._bus is not None and updated is not None:
-            from app.services.agents_service import agent_payload
-
-            self._bus.emit("agent.updated", agent_payload(updated))
+        if agent is not None:
+            presence_service.set_agent(self._db, self._bus, agent, status, task)
 
     def _settle(self, agent_id: str) -> None:
-        """Estado según sus tickets: trabajando → lab; su trabajo en revisión → oficina de
-        Sheldon; nada pendiente (o ya aprobado) → zona de descanso."""
-        mine = [t for t in tickets_repo.list_tickets(self._db) if t.assigned_agent_id == agent_id]
-        working = next((t for t in mine if t.status in ("IN_PROGRESS", "RETURNED")), None)
-        if working is not None:
-            self._set_agent(agent_id, "WORKING", working.title)
-        elif any(t.status in ("IN_SENIOR_REVIEW", "IN_QA") for t in mine):
-            review = next(t for t in mine if t.status in ("IN_SENIOR_REVIEW", "IN_QA"))
-            self._set_agent(agent_id, "REVIEW", review.title)
-        else:
-            self._set_agent(agent_id, "IDLE", None)
+        presence_service.settle_agent(self._db, self._bus, agent_id)
 
     @contextmanager
     def _busy(self, agent: Agent, task: str) -> Iterator[None]:

@@ -40,6 +40,7 @@ from app.routers import (
     health,
     messages,
     models,
+    office,
     setup,
     snapshot,
     tickets,
@@ -158,6 +159,7 @@ def create_app(
     app.include_router(admin_keys.router)
     app.include_router(admin_orchestrator.router)
     app.include_router(admin_tickets.router)
+    app.include_router(office.router)
     app.include_router(admin_tools.router)
     app.include_router(admin_workspaces.router)
     app.include_router(admin_projects.router)

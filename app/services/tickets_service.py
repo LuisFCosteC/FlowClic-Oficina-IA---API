@@ -22,7 +22,7 @@ from app.events.bus import EventBus
 from app.repositories import agents_repo
 from app.repositories import tickets_repo as repo
 from app.security import audit
-from app.services import projects_service, settings_service
+from app.services import presence_service, projects_service, settings_service
 from app.services.agents_service import agent_payload
 from app.util import new_id, now_iso
 
@@ -219,6 +219,8 @@ def _apply_agent_effect(db: Database, ticket: Ticket, to: str, now: str) -> Agen
         return None
     if agent.status in PROTECTED_AGENT_STATUSES:
         return None
+    if presence_service.get_mode(db) != "work":
+        return None  # pausa global: el ticket cambia, pero el agente sigue desactivado
     target = agent_status_for(to)  # type: ignore[arg-type]
     if target is None:  # DONE o PENDING: IDLE solo si no le quedan tickets activos
         if repo.count_active_for_agent(db, agent.id, ticket.id) > 0:
