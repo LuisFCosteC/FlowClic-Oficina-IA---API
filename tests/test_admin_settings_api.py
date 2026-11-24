@@ -70,8 +70,13 @@ def test_put_project_guarda_emite_evento_y_audita_solo_campos(
         "stack": ["python"],
     }
     # PRJ01: solo se guarda la empresa; los campos de proyecto son compatibilidad y vuelven vacíos
-    expected = {"companyName": "FlowClic", "projectName": "", "description": "", "goals": [],
-                "stack": []}
+    expected = {
+        "companyName": "FlowClic",
+        "projectName": "",
+        "description": "",
+        "goals": [],
+        "stack": [],
+    }
     assert client.put(PROJECT, json=body).json() == expected
     assert client.get(PROJECT).json() == expected
     stored = migrated_db.fetch_one("SELECT value FROM app_settings WHERE key = 'project'")

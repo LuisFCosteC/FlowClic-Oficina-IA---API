@@ -76,3 +76,24 @@ def seeded_client(client: TestClient, migrated_db: Database) -> TestClient:
 
     seed(migrated_db)
     return client
+
+
+@pytest.fixture
+def master_key() -> str:
+    from app.security.crypto import generate_master_key
+
+    return generate_master_key()
+
+
+@pytest.fixture
+def kclient(migrated_db: Database, master_key: str) -> Iterator[TestClient]:
+    """Cliente con APP_MASTER_KEY (bolsa de claves, KEY01)."""
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    settings = Settings(_env_file=None, node_env="test", app_master_key=master_key)  # type: ignore[call-arg]
+    with TestClient(
+        create_app(settings, migrated_db), base_url="http://localhost", client=("127.0.0.1", 50000)
+    ) as c:
+        yield c

@@ -1,31 +1,14 @@
 """A07a (auditoría de solo lectura, sin secretos) y A07b (usuarios)."""
 
 import json
-from collections.abc import Iterator
 
-import pytest
 from fastapi.testclient import TestClient
 
-from app.config import Settings
 from app.db.database import Database
-from app.security.crypto import generate_master_key
 
 SECRET = "sk-ant-api03-SUPERSECRETO-abcd1234"
 PASSWORD = "contraseña-muy-larga-1"
 USERS = "/api/admin/users"
-
-
-@pytest.fixture
-def cclient(migrated_db: Database) -> Iterator[TestClient]:
-    from app.main import create_app
-
-    settings = Settings(  # type: ignore[call-arg]
-        _env_file=None, node_env="test", app_master_key=generate_master_key()
-    )
-    with TestClient(
-        create_app(settings, migrated_db), base_url="http://localhost", client=("127.0.0.1", 1)
-    ) as c:
-        yield c
 
 
 def _insert_audit(db: Database, id_: str, action: str, created: str, meta: object) -> None:
@@ -77,20 +60,16 @@ def test_audit_redacta_secretos_aunque_esten_en_la_bd(
     assert "apiKey" not in text and "bien" in text
 
 
-def test_audit_de_credenciales_no_filtra_la_clave(cclient: TestClient) -> None:
-    aid = cclient.post("/api/agents", json={"name": "Howard", "role": "HW"}).json()["id"]
-    r = cclient.post(
-        f"/api/admin/agents/{aid}/credentials",
-        json={"provider": "anthropic", "label": "Principal", "secret": SECRET},
+def test_audit_de_claves_no_filtra_la_clave(kclient: TestClient) -> None:
+    r = kclient.post(
+        "/api/admin/keys", json={"provider": "anthropic", "label": "Principal", "secret": SECRET}
     )
     assert r.status_code == 201
-    cred = r.json()["id"]
-    cclient.post(
-        f"/api/admin/agents/{aid}/credentials/{cred}/rotate", json={"secret": SECRET + "-nueva"}
-    )
-    text = cclient.get("/api/admin/audit?limit=500").text
+    key_id = r.json()["id"]
+    kclient.post(f"/api/admin/keys/{key_id}/rotate", json={"secret": SECRET + "-nueva"})
+    text = kclient.get("/api/admin/audit?limit=500").text
     assert "SUPERSECRETO" not in text and SECRET not in text
-    assert "credential" in text  # sí hay entradas de auditoría de las credenciales
+    assert "key.created" in text and "key.rotated" in text
 
 
 # ── A07b ─────────────────────────────────────────────────────────────────────────────────────

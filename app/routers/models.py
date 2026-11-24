@@ -12,7 +12,7 @@ from app.db.database import Database, get_db
 from app.domain.models_catalog import MODELS_CATALOG
 from app.domain.schemas import CamelModel
 from app.errors import ErrorResponse
-from app.repositories import credentials_repo
+from app.services import key_pool
 
 router = APIRouter(prefix="/api", tags=["Modelos"])
 
@@ -26,14 +26,16 @@ class ModelInfo(CamelModel):
 
 @router.get(
     "/models",
-    summary="Catálogo de modelos y si su proveedor tiene alguna conexión API activa",
+    summary="Catálogo de modelos y si hay una clave usable (bolsa global) del proveedor",
     responses={503: {"model": ErrorResponse, "description": "API en modo SETUP"}},
 )
 def list_models(db: Annotated[Database, Depends(get_db)]) -> list[ModelInfo]:
-    connected = credentials_repo.active_providers(db)
     return [
         ModelInfo(
-            id=m.id, label=m.label, provider=m.provider, has_connection=m.provider in connected
+            id=m.id,
+            label=m.label,
+            provider=m.provider,
+            has_connection=key_pool.has_usable_key(db, m.provider, m.id),
         )
         for m in MODELS_CATALOG
     ]

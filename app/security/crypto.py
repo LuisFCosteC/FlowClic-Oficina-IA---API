@@ -20,11 +20,12 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
-Purpose = Literal["vault", "agent-credentials", "mfa"]
+Purpose = Literal["vault", "agent-credentials", "provider-keys", "mfa"]
 
 _INFO: dict[str, bytes] = {
     "vault": b"flowclic/vault/v1",
     "agent-credentials": b"flowclic/agent-credentials/v1",
+    "provider-keys": b"flowclic/provider-keys/v1",
     "mfa": b"flowclic/mfa/v1",
 }
 _NONCE_BYTES = 12
