@@ -49,7 +49,13 @@ def restrict_to_owner(path: Path) -> bool:
             )
         except (OSError, subprocess.CalledProcessError):
             return False
-        return True
+        if not broader_than_owner(path):
+            return True
+        # FIX-WIN: en algunos equipos la herencia sigue ahí tras "/inheritance:r" (la ACL
+        # conserva SYSTEM, Administradores... marcados (I)). Se convierte en explícita y se
+        # quita a todos menos al usuario. Se verifica de nuevo y, si aún queda otro principal,
+        # se falla en cerrado (False): NO se da por bueno un archivo más abierto que el dueño.
+        return _windows_strip_to_owner(path, identity)
     try:
         os.chmod(path, 0o600)
     except OSError:
@@ -80,19 +86,52 @@ def _windows_acl_principals(path: Path) -> list[tuple[str, str]] | None:
     return entries
 
 
+def _windows_strip_to_owner(path: Path, identity: tuple[str, str]) -> bool:
+    """Deja en la ACL solo al usuario (herencia → explícita, y se quitan los demás principales)."""
+    try:
+        subprocess.run(  # noqa: S603
+            ["icacls", str(path), "/inheritance:d"],  # noqa: S607
+            check=True,
+            capture_output=True,
+        )
+        entries = _windows_acl_principals(path)
+        if entries is None:
+            return False
+        me = identity[0].lower()
+        for principal in {p for p, _ in entries if p.lower() != me}:
+            subprocess.run(  # noqa: S603
+                ["icacls", str(path), "/remove:g", principal],  # noqa: S607
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(  # noqa: S603
+                ["icacls", str(path), "/remove:d", principal],  # noqa: S607
+                check=False,
+                capture_output=True,
+            )
+        subprocess.run(  # noqa: S603
+            ["icacls", str(path), "/grant:r", f"*{identity[1]}:F"],  # noqa: S607
+            check=True,
+            capture_output=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return not _windows_broader(path, identity)
+
+
+def _windows_broader(path: Path, identity: tuple[str, str] | None) -> bool:
+    entries = _windows_acl_principals(path)
+    if identity is None or not entries:
+        return True
+    me = identity[0].lower()
+    return any(p.lower() != me or "(I)" in rights for p, rights in entries)
+
+
 def broader_than_owner(path: Path) -> bool:
     """True si el archivo es accesible por alguien más que el usuario actual.
 
     Si no se puede comprobar (p. ej. icacls falla), devuelve True: ante la duda, se avisa.
     """
     if sys.platform == "win32":
-        identity = _windows_identity()
-        entries = _windows_acl_principals(path)
-        if identity is None or not entries:
-            return True
-        me = identity[0].lower()
-        for principal, rights in entries:
-            if principal.lower() != me or "(I)" in rights:
-                return True
-        return False
+        return _windows_broader(path, _windows_identity())
     return bool(path.stat().st_mode & (stat.S_IRWXG | stat.S_IRWXO))

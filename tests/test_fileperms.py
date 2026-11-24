@@ -148,3 +148,35 @@ def test_en_posix_chmod_600(tmp_path: Path) -> None:
     assert fileperms.broader_than_owner(f) is True
     assert fileperms.restrict_to_owner(f) is True
     assert fileperms.broader_than_owner(f) is False
+
+
+@windows_only
+def test_en_windows_el_respaldo_deja_un_unico_permiso_aunque_siga_la_herencia(
+    tmp_path: Path,
+) -> None:
+    """FIX-WIN: si tras `/inheritance:r` la ACL aún trae entradas heredadas, se limpian."""
+    f = tmp_path / "heredado.txt"
+    f.write_text("x")  # hereda SYSTEM, Administradores, etc. de la carpeta
+    assert fileperms.broader_than_owner(f) is True
+    identity = fileperms._windows_identity()
+    assert identity is not None
+    assert fileperms._windows_strip_to_owner(f, identity) is True
+    out = subprocess.run(  # noqa: S603
+        ["icacls", str(f)],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert len([ln for ln in out.splitlines() if ":(" in ln]) == 1, out
+    assert fileperms.broader_than_owner(f) is False
+
+
+@windows_only
+def test_en_windows_si_la_herencia_persiste_y_no_se_puede_limpiar_falla_en_cerrado(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    f = tmp_path / "x.txt"
+    f.write_text("x")
+    monkeypatch.setattr(fileperms, "_windows_strip_to_owner", lambda *_a: False)
+    monkeypatch.setattr(fileperms, "broader_than_owner", lambda _p: True)
+    assert fileperms.restrict_to_owner(f) is False
