@@ -87,8 +87,12 @@ def is_behind(db: Database, directory: Path = MIGRATIONS_DIR) -> bool:
 def _applied_rows(db: Database) -> list[Row]:
     try:
         return db.fetch_all("SELECT version FROM schema_migrations")
-    except DatabaseError:
-        return []
+    except DatabaseError as exc:
+        # Solo "aun no existe la tabla" significa BD sin migrar; un fallo de red/Turso
+        # no debe parecer "falta migrar" (devolvia 503 con la BD al dia).
+        if "no such table" in str(exc).lower():
+            return []
+        raise
 
 
 MIGRATE_HINT = "Falta migrar: python -m app.db.migrate"

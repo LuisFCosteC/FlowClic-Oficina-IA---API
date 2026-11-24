@@ -91,8 +91,11 @@ def create_app(
                 opened_db = True
             else:
                 clear_db()
-            if opened is not None and is_behind(opened):
-                print(f"[MIGRACIONES] {MIGRATE_HINT}", flush=True)
+            try:
+                if opened is not None and is_behind(opened):
+                    print(f"[MIGRACIONES] {MIGRATE_HINT}", flush=True)
+            except Exception as exc:  # noqa: BLE001 - BD inalcanzable: se avisa y se sigue
+                print(f"[BD] No se pudo comprobar las migraciones: {exc}", flush=True)
             if not has_admin(try_get_db()):
                 gate.issue()  # modo SETUP: el código solo se imprime en la consola
         app.state.vault = active_vault
