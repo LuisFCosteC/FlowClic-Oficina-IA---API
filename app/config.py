@@ -32,8 +32,8 @@ class Settings(BaseSettings):
 
     cors_origin: str = "http://localhost:3000"
     api_public_origin: str = "http://localhost:4000"
-    # "llm" = Sheldon reparte y los agentes trabajan con la bolsa de claves; "noop" = apagado.
-    orchestrator: Literal["noop", "llm"] = "llm"
+    # Activo salvo que se ponga "off". "noop" (valor antiguo de .env.example) también lo activa.
+    orchestrator: Literal["off", "noop", "llm"] = "llm"
     # None = según el entorno (activa en development/test, desactivada en production).
     docs_enabled: bool | None = None
 

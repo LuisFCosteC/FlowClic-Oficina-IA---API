@@ -104,10 +104,13 @@ def create_app(
         app.state.vault = active_vault
         sse_hub.start()
         orch_task = None
-        if cfg.orchestrator == "llm" and cfg.node_env != "test":
-            from app.orchestrator.service import run_forever
+        if cfg.node_env != "test":
+            if cfg.orchestrator == "off":
+                print("[ORQUESTADOR] Apagado (ORCHESTRATOR=off en el .env).", flush=True)
+            else:
+                from app.orchestrator.service import run_forever
 
-            orch_task = asyncio.create_task(run_forever(cfg, the_bus))
+                orch_task = asyncio.create_task(run_forever(cfg, the_bus))
         yield
         if orch_task is not None:
             orch_task.cancel()
