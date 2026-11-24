@@ -213,6 +213,10 @@ def test_los_agentes_no_leen_env_ni_salen_del_espacio(
     with pytest.raises(AppError):
         fs_tools.read_file(migrated_db, howard, "w1", "../fuera.txt")
     assert ".env" not in fs_tools.list_dir(migrated_db, howard, "w1")
+    # Windows: flujos alternativos, nombres cortos 8.3 y punto/espacio final no esquivan la lista
+    for sneaky in ("ok.txt:secreto", "ENV~1", ".env.", ".env ", "a/../.env", "x<y"):
+        with pytest.raises(AppError):
+            fs_tools.read_file(migrated_db, howard, "w1", sneaky)
 
 
 def test_error_del_modelo_no_rompe_el_tick(

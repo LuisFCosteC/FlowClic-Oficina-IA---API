@@ -43,10 +43,36 @@ def visible_workspaces(db: Database, agent: Agent) -> list[Workspace]:
     return out
 
 
+_BAD_CHARS = set(':<>"|?*~')
+
+
+def _check_components(rel: str) -> None:
+    """Windows: `:` abre flujos alternativos (archivo.txt:secreto), `~` nombres cortos 8.3
+    (ENV~1) y un punto o espacio final se ignoran: se rechazan para que la lista de archivos
+    sensibles no se pueda esquivar con un nombre distinto del real."""
+    for part in rel.replace("\\", "/").split("/"):
+        if part in ("", "."):
+            continue
+        if (_BAD_CHARS & set(part)) or part != part.rstrip(" .") or part == "..":
+            raise AppError("FORBIDDEN", f"Nombre de ruta no permitido: «{part}»")
+
+
+def _unsafe_entry(root: Path, entry: Path) -> bool:
+    """Enlaces simbólicos, uniones (junctions) y cualquier cosa que resuelva fuera del root."""
+    if entry.is_symlink() or entry.is_junction():
+        return True
+    try:
+        real = entry.resolve()
+    except OSError:
+        return True
+    return real != root and root not in real.parents
+
+
 def _resolve(db: Database, agent: Agent, workspace_id: str, rel: str) -> tuple[Workspace, Path]:
     ws = next((w for w in visible_workspaces(db, agent) if w.id == workspace_id), None)
     if ws is None:
         raise AppError("FORBIDDEN", f"No tienes acceso al espacio de trabajo «{workspace_id}»")
+    _check_components(rel)
     enforce_path_allowed(rel)
     root = Path(ws.path).resolve()
     target = (root / rel).resolve() if rel not in ("", ".") else root
@@ -62,18 +88,19 @@ def _resolve(db: Database, agent: Agent, workspace_id: str, rel: str) -> tuple[W
             if parent == root:
                 break
             between.append(parent)
-        if probe.is_symlink() or any(p.is_symlink() for p in between):
+        if _unsafe_entry(root, probe) or any(p.is_symlink() or p.is_junction() for p in between):
             raise AppError("FORBIDDEN", "No se permiten enlaces simbólicos")
     return ws, target
 
 
 def list_dir(db: Database, agent: Agent, workspace_id: str, rel: str = "") -> str:
-    _, target = _resolve(db, agent, workspace_id, rel)
+    ws, target = _resolve(db, agent, workspace_id, rel)
+    root = Path(ws.path).resolve()
     if not target.is_dir():
         raise AppError("NOT_FOUND", "La carpeta no existe")
     names: list[str] = []
     for entry in sorted(target.iterdir(), key=lambda p: (p.is_file(), p.name.lower())):
-        if entry.is_symlink() or (entry.is_dir() and entry.name in _SKIP_DIRS):
+        if _unsafe_entry(root, entry) or (entry.is_dir() and entry.name in _SKIP_DIRS):
             continue
         try:
             enforce_path_allowed(entry.name)
@@ -103,7 +130,8 @@ def read_file(db: Database, agent: Agent, workspace_id: str, rel: str) -> str:
 
 def tree(db: Database, agent: Agent, workspace_id: str, rel: str = "", depth: int = 2) -> str:
     """Árbol corto (2 niveles) para orientarse sin pedir carpeta por carpeta."""
-    _, target = _resolve(db, agent, workspace_id, rel)
+    ws, target = _resolve(db, agent, workspace_id, rel)
+    root = Path(ws.path).resolve()
     lines: list[str] = []
 
     def walk(path: Path, level: int, prefix: str) -> None:
@@ -114,7 +142,7 @@ def tree(db: Database, agent: Agent, workspace_id: str, rel: str = "", depth: in
         except OSError:
             return
         for e in entries:
-            if e.is_symlink() or (e.is_dir() and e.name in _SKIP_DIRS):
+            if _unsafe_entry(root, e) or (e.is_dir() and e.name in _SKIP_DIRS):
                 continue
             try:
                 enforce_path_allowed(e.name)
