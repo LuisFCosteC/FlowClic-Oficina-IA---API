@@ -695,3 +695,18 @@ No recibió los informes de las rondas 10 y 11. Comprobaciones propias:
 Hallazgo: las rutas admin no tienen autenticación. Es intencionado hasta S09; la API escucha solo en 127.0.0.1.
 
 Veredictos pendientes: el QA Senior debe repetir la ronda leyendo este archivo.
+
+## Ronda 12 — QA Senior (2026-11-23)
+
+Solo lectura. Navegador: AG-MANUAL abre vacío, sin plantillas, 0 permisos precargados (cerrado con Cancelar). WS-ID: al escribir «Página Abogada» en el ID solo aparece el error del regex; en «Nombre descriptivo» el ID queda vacío: no se propone `pagina-abogada`.
+Evidencias débiles: los PASA de ADM01–ADM09 y ADM-ERR (R10/R11 Junior) citan código y commits, no pruebas por panel; la R11 Junior repite «754 pasan» de la R10.
+
+| ID | Veredicto | Motivo |
+|---|---|---|
+| A01–A06, A07, A07a, GM00 | HECHO | Tests en verde; audit 200 sin secretos |
+| ADM01–ADM09, ADM-ERR | HECHO (evidencia débil) | Revisión Dev Senior OK; sin prueba por panel |
+| AG-MANUAL | HECHO | Comprobado en navegador |
+| CONN01 | HECHO | Código correcto + Revisión Dev Senior OK |
+| WS-ID | DEVUELTA | El slug no se propone desde el nombre |
+
+Decisión del CEO: se aceptan los veredictos. Nota: tras KEY01 el panel Conexiones del FRONT queda roto (410) hasta KEY-UI.
