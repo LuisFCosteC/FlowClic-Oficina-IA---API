@@ -31,6 +31,7 @@ def test_bd_atrasada_responde_503_y_al_migrar_se_recupera(
 ) -> None:
     monkeypatch.setattr(MigrationGuardMiddleware, "CACHE_SECONDS", 0.0)
     migrate(raw_db)
+    latest = int(raw_db.fetch_one("SELECT MAX(version) AS v FROM schema_migrations")["v"])  # type: ignore[index]
     raw_db.execute(
         "DELETE FROM schema_migrations WHERE version = (SELECT MAX(version) FROM schema_migrations)"
     )
@@ -41,5 +42,10 @@ def test_bd_atrasada_responde_503_y_al_migrar_se_recupera(
             assert r.json()["error"]["code"] == "MIGRATION_REQUIRED"
             assert "python -m app.db.migrate" in r.json()["error"]["message"]
         assert c.get("/api/health").status_code == 200  # la salud sigue abierta
-        migrate(raw_db)  # python -m app.db.migrate
+        # al aplicar la migración pendiente queda registrada y la API se recupera
+        raw_db.execute(
+            "INSERT INTO schema_migrations (version, name, applied_at)"
+            " VALUES (?, 'ultima.sql', 'ahora')",
+            (latest,),
+        )
         assert c.get("/api/snapshot").status_code == 200  # se recupera sin reiniciar

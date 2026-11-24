@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     session_secret: str | None = None
     session_idle_minutes: int = 30
     session_max_hours: int = 8
+    # None = exigir login salvo en NODE_ENV=test; AUTH_ENFORCED=false lo desactiva (solo dev).
+    auth_enforced: bool | None = None
 
     backup_dir: str = "backups"
     backup_interval_hours: int = 24

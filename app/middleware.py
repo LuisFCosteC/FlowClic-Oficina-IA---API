@@ -5,11 +5,13 @@ import time
 import uuid
 
 from starlette.datastructures import Headers, MutableHeaders
+from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.db.database import try_get_db
 from app.db.migrate import MIGRATE_HINT, is_behind
 from app.errors import error_response
+from app.services.auth_service import COOKIE_NAME, principal_for_token
 
 _ALWAYS_OPEN = ("/api/health", "/api/setup", "/api/docs", "/api/redoc", "/api/openapi.json")
 
@@ -29,6 +31,77 @@ class SetupModeMiddleware:
                 )
                 await response(scope, receive, send)
                 return
+        await self.app(scope, receive, send)
+
+
+_AUTH_OPEN = (
+    "/api/health",
+    "/api/setup",
+    "/api/auth/login",
+    "/api/docs",
+    "/api/redoc",
+    "/api/openapi.json",
+)
+_PASSWORD_CHANGE_OK = ("/api/auth/me", "/api/auth/logout", "/api/auth/change-password")
+
+
+class AuthMiddleware:
+    """Exige sesión en todo `/api/*` salvo salud, setup, login y documentación (S06/S09).
+
+    - 401 `UNAUTHENTICATED` sin sesión válida; 403 `PASSWORD_CHANGE_REQUIRED` mientras la
+      contraseña sea temporal (solo se permite cambiarla, ver quién es o salir).
+    - Roles: ADMIN todo; OPERATOR todo salvo `/api/admin/*`; VIEWER solo lectura (GET) y nada de
+      `/api/admin/*`.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path: str = scope["path"]
+        method: str = scope["method"]
+        settings = scope["app"].state.settings
+        enforced = (
+            settings.auth_enforced
+            if settings.auth_enforced is not None
+            else settings.node_env != "test"
+        )
+        db = try_get_db()
+        if (
+            not enforced
+            or db is None
+            or method == "OPTIONS"
+            or not path.startswith("/api/")
+            or path.startswith(_AUTH_OPEN)
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        token = Request(scope).cookies.get(COOKIE_NAME)
+        principal = principal_for_token(db, settings, token)
+        if principal is None:
+            response = error_response(401, "UNAUTHENTICATED", "Inicia sesión para continuar")
+            await response(scope, receive, send)
+            return
+        user = principal.user
+        if user.must_change_password and path not in _PASSWORD_CHANGE_OK:
+            response = error_response(
+                403, "PASSWORD_CHANGE_REQUIRED", "Debes cambiar tu contraseña temporal"
+            )
+            await response(scope, receive, send)
+            return
+        is_admin_path = path.startswith("/api/admin")
+        denied = (user.role != "ADMIN" and is_admin_path) or (
+            user.role == "VIEWER" and method not in ("GET", "HEAD")
+        )
+        if denied and path not in _PASSWORD_CHANGE_OK:
+            response = error_response(403, "FORBIDDEN", "Tu rol no permite esta operación")
+            await response(scope, receive, send)
+            return
+        scope.setdefault("state", {})["principal"] = principal
         await self.app(scope, receive, send)
 
 

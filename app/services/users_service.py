@@ -14,7 +14,8 @@ from app.services.setup_service import EMAIL_RE
 from app.util import new_id, now_iso
 
 _COLUMNS = (
-    "id, email, display_name, role, mfa_enabled, last_login_at, disabled_at, created_at, updated_at"
+    "id, email, display_name, role, mfa_enabled, must_change_password, last_login_at,"
+    " disabled_at, created_at, updated_at"
 )
 
 
@@ -26,6 +27,7 @@ def _user(r: Row) -> AdminUser:
             "display_name": r["display_name"],
             "role": r["role"],
             "mfa_enabled": bool(r["mfa_enabled"]),
+            "must_change_password": bool(r["must_change_password"]),
             "last_login_at": r["last_login_at"],
             "disabled_at": r["disabled_at"],
             "created_at": r["created_at"],
@@ -67,7 +69,8 @@ def create_user(db: Database, body: UserCreate, actor_id: str | None = None) -> 
         with db.transaction() as tx:
             tx.execute(
                 "INSERT INTO users (id, email, display_name, password_hash, role, mfa_enabled,"
-                " password_changed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)",
+                " must_change_password, password_changed_at, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?, ?)",
                 (user_id, email, name, password_hash, body.role, now, now, now),
             )
             audit.record(
@@ -148,6 +151,13 @@ def update_user(
     return get_or_404(db, user_id)
 
 
-def revoke_sessions(db: Database, user_id: str) -> None:
+def revoke_sessions(db: Database, user_id: str, actor_id: str | None = None) -> None:
     get_or_404(db, user_id)
-    raise AppError("NOT_IMPLEMENTED", "Revocar sesiones estará disponible con el login (S06)")
+    with db.transaction() as tx:
+        tx.execute(
+            "UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
+            (now_iso(), user_id),
+        )
+        audit.record(
+            tx, "user.sessions_revoked", target_type="user", target_id=user_id, user_id=actor_id
+        )

@@ -144,8 +144,14 @@ def test_cambiar_nombre_del_ultimo_admin_si_se_puede(client: TestClient) -> None
     assert client.patch(f"{USERS}/{only}", json={"role": "ADMIN"}).status_code == 200
 
 
-def test_revoke_sessions_es_501_hasta_s06(client: TestClient) -> None:
+def test_revoke_sessions_cierra_las_sesiones(client: TestClient, migrated_db: Database) -> None:
     uid = _create(client).json()["id"]
-    r = client.post(f"{USERS}/{uid}/revoke-sessions")
-    assert r.status_code == 501 and r.json()["error"]["code"] == "NOT_IMPLEMENTED"
+    migrated_db.execute(
+        "INSERT INTO sessions (id, user_id, token_hash, created_at, last_seen_at, expires_at)"
+        " VALUES ('s9', ?, 'h9', 'n', 'n', 'n')",
+        (uid,),
+    )
+    assert client.post(f"{USERS}/{uid}/revoke-sessions").status_code == 204
+    row = migrated_db.fetch_one("SELECT revoked_at FROM sessions WHERE id = 's9'")
+    assert row is not None and row["revoked_at"] is not None
     assert client.post(f"{USERS}/nada/revoke-sessions").status_code == 404

@@ -2,7 +2,7 @@
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 
 from app.db.database import Database, get_db
 from app.domain.admin_schemas import AdminUser, AuditEntry, UserCreate, UserUpdate
@@ -69,11 +69,10 @@ def update_user(user_id: str, body: UserUpdate, db: Db) -> AdminUser:
 
 @router.post(
     "/users/{user_id}/revoke-sessions",
-    summary="Revocar todas las sesiones del usuario (501 hasta que exista S06)",
-    responses={
-        **_NOT_FOUND,
-        501: {"model": ErrorResponse, "description": "Pendiente de S06"},
-    },
+    status_code=204,
+    summary="Revocar todas las sesiones del usuario",
+    responses=_NOT_FOUND,
 )
-def revoke_sessions(user_id: str, db: Db) -> None:
+def revoke_sessions(user_id: str, db: Db) -> Response:
     users_service.revoke_sessions(db, user_id)
+    return Response(status_code=204)

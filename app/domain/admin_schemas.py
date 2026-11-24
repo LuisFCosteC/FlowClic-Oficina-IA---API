@@ -84,6 +84,7 @@ class AdminUser(CamelModel):
     display_name: str
     role: UserRole
     mfa_enabled: bool
+    must_change_password: bool = False
     last_login_at: str | None
     disabled_at: str | None
     created_at: str

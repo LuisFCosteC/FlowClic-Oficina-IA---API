@@ -13,7 +13,12 @@ from app.db.database import Database, clear_db, set_db, try_get_db
 from app.db.migrate import MIGRATE_HINT, is_behind
 from app.errors import register_error_handlers
 from app.events.bus import EventBus, get_bus
-from app.middleware import MigrationGuardMiddleware, SecurityMiddleware, SetupModeMiddleware
+from app.middleware import (
+    AuthMiddleware,
+    MigrationGuardMiddleware,
+    SecurityMiddleware,
+    SetupModeMiddleware,
+)
 from app.realtime.sse import SSEHub
 from app.routers import (
     admin_credentials,
@@ -26,6 +31,7 @@ from app.routers import (
     admin_workspaces,
     agent_templates,
     agents,
+    auth,
     docs,
     events,
     health,
@@ -114,6 +120,7 @@ def create_app(
     app.dependency_overrides[get_bus] = lambda: the_bus  # rutas, SSE y tests: el mismo bus
     register_error_handlers(app)
 
+    app.add_middleware(AuthMiddleware)  # el más interno: ya hay BD migrada y no es modo SETUP
     app.add_middleware(MigrationGuardMiddleware)
     app.add_middleware(SetupModeMiddleware)
     app.add_middleware(  # el último en añadirse es el más externo: CORS envuelve al resto
@@ -130,6 +137,7 @@ def create_app(
     app.include_router(agent_templates.router)
     app.include_router(agents.router)
     app.include_router(tickets.router)
+    app.include_router(auth.router)
     app.include_router(admin_credentials.router)
     app.include_router(admin_keys.router)
     app.include_router(admin_tools.router)
