@@ -25,8 +25,10 @@ from app.routers import (
     admin_credentials,
     admin_db,
     admin_keys,
+    admin_orchestrator,
     admin_projects,
     admin_settings,
+    admin_tickets,
     admin_tools,
     admin_users,
     admin_workspaces,
@@ -151,6 +153,8 @@ def create_app(
     app.include_router(auth.router)
     app.include_router(admin_credentials.router)
     app.include_router(admin_keys.router)
+    app.include_router(admin_orchestrator.router)
+    app.include_router(admin_tickets.router)
     app.include_router(admin_tools.router)
     app.include_router(admin_workspaces.router)
     app.include_router(admin_projects.router)

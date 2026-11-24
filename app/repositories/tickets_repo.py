@@ -101,7 +101,7 @@ def set_status(db: Database, ticket_id: str, status: str, now: str) -> None:
 def count_active_for_agent(db: Database, agent_id: str, exclude_ticket: str) -> int:
     row = db.fetch_one(
         "SELECT COUNT(*) AS n FROM tickets WHERE assigned_agent_id = ? AND id <> ?"
-        " AND status IN ('IN_PROGRESS','IN_QA','IN_SENIOR_REVIEW','IN_REVIEW','RETURNED')",
+        " AND status IN ('IN_PROGRESS','IN_QA','IN_SENIOR_REVIEW','RETURNED')",
         (agent_id, exclude_ticket),
     )
     return int(row["n"]) if row else 0

@@ -34,6 +34,8 @@ def agent_status_for(to: TicketStatus) -> AgentStatus | None:
     """Efecto en el agente asignado. `None` = IDLE solo si no le quedan tickets activos."""
     if to in ("IN_PROGRESS", "RETURNED"):
         return "WORKING"
-    if to in ("IN_SENIOR_REVIEW", "IN_QA", "IN_REVIEW"):
-        return "REVIEW"
-    return None
+    if to in ("IN_SENIOR_REVIEW", "IN_QA"):
+        return "REVIEW"  # su trabajo está en revisión: espera en la oficina de Sheldon
+    return (
+        None  # IN_REVIEW (ya aprobado, en manos del CEO), DONE, PENDING: descansa si no tiene más
+    )

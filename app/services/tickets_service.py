@@ -21,6 +21,7 @@ from app.errors import AppError, conflict, not_found, validation_error
 from app.events.bus import EventBus
 from app.repositories import agents_repo
 from app.repositories import tickets_repo as repo
+from app.security import audit
 from app.services import projects_service, settings_service
 from app.services.agents_service import agent_payload
 from app.util import new_id, now_iso
@@ -410,3 +411,55 @@ def edit_ticket(db: Database, bus: EventBus | None, ticket_id: str, body: Ticket
     if bus is not None:
         bus.emit("ticket.updated", ticket_payload(updated))
     return updated
+
+
+def purge_tickets(db: Database, bus: EventBus | None, scope: str) -> int:
+    """Borra tickets (y lo que cuelga de ellos) a petición del CEO. NO toca a los agentes.
+
+    `scope="done"`: solo los HECHOS (con sus subtareas hechas). `scope="all"`: todos; los agentes
+    que seguían con un ticket vuelven a IDLE. Devuelve cuántos se borraron.
+    """
+    if scope not in ("done", "all"):
+        raise validation_error("scope debe ser «done» o «all»")
+    rows = (
+        db.fetch_all("SELECT id, kind FROM tickets WHERE status = 'DONE'")
+        if scope == "done"
+        else db.fetch_all("SELECT id, kind FROM tickets")
+    )
+    ids = [str(r["id"]) for r in rows]
+    if not ids:
+        return 0
+    # Primero las subtareas, luego los pedidos (parent_ticket_id apunta a tickets.id).
+    ordered = [str(r["id"]) for r in rows if r["kind"] == "TASK"] + [
+        str(r["id"]) for r in rows if r["kind"] != "TASK"
+    ]
+    now = now_iso()
+    with db.transaction() as tx:
+        for ticket_id in ordered:
+            tx.execute("DELETE FROM ticket_events WHERE ticket_id = ?", (ticket_id,))
+            tx.execute("DELETE FROM approvals WHERE ticket_id = ?", (ticket_id,))
+            tx.execute("DELETE FROM agent_messages WHERE ticket_id = ?", (ticket_id,))
+            tx.execute(
+                "UPDATE project_memory SET ticket_id = NULL WHERE ticket_id = ?", (ticket_id,)
+            )
+            tx.execute(
+                "UPDATE tickets SET parent_ticket_id = NULL WHERE parent_ticket_id = ?",
+                (ticket_id,),
+            )
+            tx.execute("DELETE FROM tickets WHERE id = ?", (ticket_id,))
+        agents_changed: list[Agent] = []
+        for agent in agents_repo.list_agents(tx):
+            if agent.archived_at is not None or agent.status in PROTECTED_AGENT_STATUSES:
+                continue
+            if repo.count_active_for_agent(tx, agent.id, "") == 0 and agent.status != "IDLE":
+                agents_repo.set_status(tx, agent.id, "IDLE", None, now)
+                updated = agents_repo.get_agent(tx, agent.id)
+                if updated is not None:
+                    agents_changed.append(updated)
+        audit.record(tx, "tickets.purged", meta={"scope": scope, "count": len(ids)})
+    if bus is not None:
+        for ticket_id in ids:
+            bus.emit("ticket.deleted", {"id": ticket_id})
+        for agent in agents_changed:
+            bus.emit("agent.updated", agent_payload(agent))
+    return len(ids)

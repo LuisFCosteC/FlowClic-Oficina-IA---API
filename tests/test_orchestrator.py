@@ -141,6 +141,8 @@ def test_flujo_completo_termina_en_revision_cto_y_nunca_en_hecho(
     assert st["Análisis"] == "IN_REVIEW"  # Revisión CTO: solo el CEO lo pasa a HECHO
     assert st["Analizar el proyecto"] == "IN_REVIEW"
     assert "DONE" not in st.values()
+    # terminado y aprobado: nadie queda trabajando, todos vuelven a la zona de descanso
+    assert {a["status"] for a in client.get("/api/agents").json()} == {"IDLE"}
     thread = client.get("/api/messages", params={"scope": "GLOBAL"}).json()
     assert any("Resumen para el CEO" in e["body"] for e in thread)
     kids = [t for t in client.get("/api/tickets").json() if t["parentTicketId"] == req["id"]]
@@ -225,3 +227,8 @@ def test_error_del_modelo_no_rompe_el_tick(
     make_request(client)
     run(migrated_db, BoomLlm(), ticks=3)
     assert statuses(client)["Análisis"] == "IN_PROGRESS"  # Sheldon lo tomó; sigue reintentando
+
+
+def test_endpoint_de_estado_explica_el_motivo(client: TestClient) -> None:
+    body = client.get("/api/admin/orchestrator").json()
+    assert {"mode", "running", "reason", "pendingMessages", "tickets"} <= set(body)

@@ -50,7 +50,7 @@ def test_flujo_completo_con_las_dos_revisiones_y_efecto_en_el_agente(client: Tes
         ("IN_PROGRESS", "WORKING"),
         ("IN_SENIOR_REVIEW", "REVIEW"),
         ("IN_QA", "REVIEW"),
-        ("IN_REVIEW", "REVIEW"),
+        ("IN_REVIEW", "IDLE"),  # aprobado: en manos del CEO, el agente descansa
         ("DONE", "IDLE"),
     ]:
         r = move(client, tid, to)

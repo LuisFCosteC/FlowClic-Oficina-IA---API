@@ -15,8 +15,10 @@ nombre del agente (`as_agent`); las revisiones las hace un agente distinto del a
 import logging
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.db.database import Database
@@ -75,6 +77,16 @@ _RULES = (
 )
 
 
+def safe_error(exc: BaseException) -> str:
+    """Texto de un fallo apto para mostrar: solo mensajes propios (AppError/LlmError, genéricos);
+    de cualquier otra excepción solo el nombre de la clase (nunca URLs ni cuerpos de proveedor)."""
+    if isinstance(exc, AppError):
+        return exc.message
+    if isinstance(exc, LlmError):
+        return str(exc)
+    return f"Error interno ({exc.__class__.__name__})"
+
+
 class Orchestrator:
     def __init__(
         self,
@@ -98,6 +110,8 @@ class Orchestrator:
         self._next_try: dict[str, float] = {}
         self._fails: dict[str, int] = {}
         self._notified: set[str] = set()
+        self.last_error: str | None = None
+        self._started = datetime.now(UTC)
 
     # ── bucle ────────────────────────────────────────────────────────────────────────────────
     def tick(self) -> int:
@@ -131,8 +145,9 @@ class Orchestrator:
             * (4 if isinstance(exc, AppError) and exc.code == "NO_KEY_AVAILABLE" else 1)
         )
         self._next_try[key] = self._clock() + wait
-        what = exc.message if isinstance(exc, AppError) else str(exc) or exc.__class__.__name__
+        what = safe_error(exc)
         log.warning("Orquestador: %s falló (%s/%s): %s", key, n, MAX_FAILS, what)
+        self.last_error = what
         if n >= MAX_FAILS and key not in self._notified and ticket is not None:
             self._notified.add(key)
             self._say_system(
@@ -173,15 +188,18 @@ class Orchestrator:
             return False
         if t.status in ("PENDING", "RETURNED"):
             t = self._move(t, "IN_PROGRESS", cto, "Sheldon toma el pedido")
-            self._plan(t, cto)
+            with self._busy(cto, t.title):
+                self._plan(t, cto)
             return True
         if t.status == "IN_PROGRESS":
             kids = self._children(t.id)
             if not kids:
-                self._plan(t, cto)
+                with self._busy(cto, t.title):
+                    self._plan(t, cto)
                 return True
             if all(k.status in ("IN_REVIEW", "DONE") for k in kids):
-                self._deliver(t, cto, kids)
+                with self._busy(cto, t.title):
+                    self._deliver(t, cto, kids)
                 return True
         return False
 
@@ -216,7 +234,8 @@ class Orchestrator:
                     t.id,
                 )
                 return False
-            self._review(t, reviewer, pair[1])
+            with self._busy(reviewer, t.title):
+                self._review(t, reviewer, pair[1])
             return True
         return False
 
@@ -236,6 +255,45 @@ class Orchestrator:
         if pair[0] == "IN_SENIOR_REVIEW":
             return boss or next((a for a in ok if is_senior_reviewer(a.permissions)), None) or cto
         return cto or boss or (ok[0] if ok else None)
+
+    # ── estado visible del agente (laboratorio / oficina de Sheldon / descanso) ───────────────
+    def _set_agent(self, agent_id: str, status: str, task: str | None) -> None:
+        agent = agents_repo.get_agent(self._db, agent_id)
+        if agent is None or agent.archived_at is not None:
+            return
+        if agent.status in ("BLOCKED", "SLEEP_QUOTA") or (
+            agent.status == status and agent.current_task == task
+        ):
+            return
+        agents_repo.set_status(self._db, agent_id, status, task, now_iso())  # type: ignore[arg-type]
+        updated = agents_repo.get_agent(self._db, agent_id)
+        if self._bus is not None and updated is not None:
+            from app.services.agents_service import agent_payload
+
+            self._bus.emit("agent.updated", agent_payload(updated))
+
+    def _settle(self, agent_id: str) -> None:
+        """Estado según sus tickets: trabajando → lab; su trabajo en revisión → oficina de
+        Sheldon; nada pendiente (o ya aprobado) → zona de descanso."""
+        mine = [t for t in tickets_repo.list_tickets(self._db) if t.assigned_agent_id == agent_id]
+        working = next((t for t in mine if t.status in ("IN_PROGRESS", "RETURNED")), None)
+        if working is not None:
+            self._set_agent(agent_id, "WORKING", working.title)
+        elif any(t.status in ("IN_SENIOR_REVIEW", "IN_QA") for t in mine):
+            review = next(t for t in mine if t.status in ("IN_SENIOR_REVIEW", "IN_QA"))
+            self._set_agent(agent_id, "REVIEW", review.title)
+        else:
+            self._set_agent(agent_id, "IDLE", None)
+
+    @contextmanager
+    def _busy(self, agent: Agent, task: str) -> Iterator[None]:
+        """Mientras un agente revisa, reparte o resume trabaja (laboratorio); al terminar, a su
+        estado normal."""
+        self._set_agent(agent.id, "WORKING", task)
+        try:
+            yield
+        finally:
+            self._settle(agent.id)
 
     # ── mensajes ─────────────────────────────────────────────────────────────────────────────
     def _post(
@@ -284,7 +342,14 @@ class Orchestrator:
 
     def _answer_messages(self) -> int:
         done = 0
+        stale = (
+            (self._started - timedelta(minutes=10)).isoformat(timespec="milliseconds")
+        ).replace("+00:00", "Z")
         for m in messages_repo.list_pending_human(self._db):
+            if m.created_at < stale:
+                # Órdenes de antes de arrancar el orquestador: no se contestan de golpe.
+                messages_repo.set_status(self._db, m.id, "ACK")
+                continue
             key = f"m:{m.id}"
             if self._clock() < self._next_try.get(key, 0):
                 continue
@@ -296,13 +361,18 @@ class Orchestrator:
                 messages_repo.set_status(self._db, m.id, "ACK")
                 continue
             try:
-                self._reply_to(m, target)
+                with self._busy(target, m.body[:60]):
+                    self._reply_to(m, target)
                 messages_repo.set_status(self._db, m.id, "DONE")
                 done += 1
             except Exception as exc:  # noqa: BLE001
                 n = self._fails.get(key, 0) + 1
                 self._fails[key] = n
                 self._next_try[key] = self._clock() + self._retry * n
+                self.last_error = safe_error(exc)
+                log.warning(
+                    "Orquestador: no pudo responder el mensaje %s: %s", m.id, self.last_error
+                )
                 if n >= MAX_FAILS:
                     what = exc.message if isinstance(exc, AppError) else "error del proveedor"
                     messages_repo.set_status(self._db, m.id, "REJECTED")
