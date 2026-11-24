@@ -8,6 +8,7 @@ en blanco del modal "Crear agente".
 from app.domain.schemas import (
     AgentAvatar,
     CamelModel,
+    FolderAccess,
     Limits,
     ModelConfig,
     Permissions,
@@ -59,7 +60,8 @@ SHELDON = AgentTemplate(
         "No inventa requisitos que el CEO no pidió (si falta información, pregunta).",
     ],
     permissions=Permissions(
-        workspaces={"api": "read", "front": "read", "docs": "write"},
+        folder_access=FolderAccess(api="read", front="read", docs="write"),
+        project_scope="ALL",
         actions=[
             "repo.read",
             "tickets.create",
@@ -105,7 +107,8 @@ LEONARD = AgentTemplate(
         "No borra tests.",
     ],
     permissions=Permissions(
-        workspaces={"api": "write", "front": "none", "docs": "read"},
+        folder_access=FolderAccess(api="write", docs="read"),
+        project_scope="ALL",
         actions=[
             "repo.read",
             "cmd.install_approved",
@@ -155,7 +158,8 @@ PENNY = AgentTemplate(
         "No rediseña pantallas sin un ticket que lo pida.",
     ],
     permissions=Permissions(
-        workspaces={"api": "none", "front": "write", "docs": "read"},
+        folder_access=FolderAccess(front="write", docs="read"),
+        project_scope="ALL",
         actions=[
             "repo.read",
             "cmd.install_approved",
@@ -206,7 +210,8 @@ RAJ = AgentTemplate(
         "No desactiva ni borra tests para que pasen.",
     ],
     permissions=Permissions(
-        workspaces={"api": "tests", "front": "tests", "docs": "qa_report"},
+        folder_access=FolderAccess(api="tests", front="tests", docs="qa_report"),
+        project_scope="ALL",
         actions=["repo.read", "cmd.test", "cmd.lint", "cmd.audit"],
         ticket_transitions=[("IN_QA", "IN_REVIEW"), ("IN_QA", "RETURNED")],
         only_assigned_tickets=False,

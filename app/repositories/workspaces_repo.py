@@ -10,6 +10,8 @@ def _to_model(r: Row) -> Workspace:
             "id": r["id"],
             "name": r["name"],
             "path": r["path"],
+            "project_id": r["project_id"],
+            "kind": r["kind"],
             "created_at": r["created_at"],
             "updated_at": r["updated_at"],
         }
@@ -37,17 +39,23 @@ def existing_ids(db: Database, ids: list[str]) -> set[str]:
     return {str(r["id"]) for r in rows}
 
 
-def insert(db: Database, ws_id: str, name: str, path: str, now: str) -> None:
+def insert(
+    db: Database, ws_id: str, name: str, path: str, project_id: str | None, kind: str, now: str
+) -> None:
     db.execute(
-        "INSERT INTO workspaces (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (ws_id, name, path, now, now),
+        "INSERT INTO workspaces (id, name, path, project_id, kind, created_at, updated_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (ws_id, name, path, project_id, kind, now, now),
     )
 
 
-def update(db: Database, ws_id: str, name: str, path: str, now: str) -> None:
+def update(
+    db: Database, ws_id: str, name: str, path: str, project_id: str | None, kind: str, now: str
+) -> None:
     db.execute(
-        "UPDATE workspaces SET name = ?, path = ?, updated_at = ? WHERE id = ?",
-        (name, path, now, ws_id),
+        "UPDATE workspaces SET name = ?, path = ?, project_id = ?, kind = ?, updated_at = ?"
+        " WHERE id = ?",
+        (name, path, project_id, kind, now, ws_id),
     )
 
 

@@ -14,7 +14,7 @@ from app.errors import AppError, not_found, validation_error
 from app.events.bus import EventBus
 from app.repositories import agents_repo
 from app.repositories import tickets_repo as repo
-from app.services import settings_service
+from app.services import projects_service, settings_service
 from app.services.agents_service import agent_payload
 from app.util import new_id, now_iso
 
@@ -64,6 +64,8 @@ def create_ticket(db: Database, bus: EventBus | None, data: TicketCreate) -> Tic
     title = data.title.strip()
     if not title:
         raise validation_error("El título no puede estar vacío")
+    if data.project_id is not None:
+        projects_service.require_active(db, data.project_id)
     if data.model is not None and data.model not in MODEL_IDS:
         raise validation_error(
             f"model: modelo desconocido: {data.model}",
@@ -78,7 +80,7 @@ def create_ticket(db: Database, bus: EventBus | None, data: TicketCreate) -> Tic
         status="PENDING",
         priority=data.priority or "MEDIUM",
         assigned_agent_id=data.assigned_agent_id,
-        project=data.project,
+        project_id=data.project_id,
         model_tier=data.model_tier or "sonnet_pro",
         estimated_cost_usd=data.estimated_cost_usd or 0,
         position=int(row["p"]) if row else 0,
@@ -103,9 +105,10 @@ def create_ticket(db: Database, bus: EventBus | None, data: TicketCreate) -> Tic
             payload="{}",
             now=now,
         )
+    created = get_ticket_or_404(db, ticket.id)  # con el nombre del proyecto
     if bus is not None:
-        bus.emit("ticket.created", ticket_payload(ticket))
-    return ticket
+        bus.emit("ticket.created", ticket_payload(created))
+    return created
 
 
 def _apply_agent_effect(db: Database, ticket: Ticket, to: str, now: str) -> Agent | None:

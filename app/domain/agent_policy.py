@@ -4,7 +4,6 @@ Distinción clave: reglas y funciones son BLANDAS (van al prompt); restricciones
 DURAS: los aplica la API con código, aunque el modelo "quiera" otra cosa.
 """
 
-import re
 from collections.abc import Sequence
 
 from app.domain.models_catalog import validate_model_ids
@@ -14,6 +13,7 @@ from app.domain.schemas import (
     Permissions,
     RoleType,
     TicketStatus,
+    WorkspaceLevel,
 )
 from app.errors import AppError, validation_error
 
@@ -74,16 +74,13 @@ VALID_TRANSITIONS: frozenset[tuple[TicketStatus, TicketStatus]] = frozenset(
     }
 )
 
-# Espacios de trabajo: identificadores lógicos (api, front, docs), nunca rutas.
-_WORKSPACE_ID = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
-
 
 def check_permissions(role_type: RoleType, permissions: Permissions) -> None:
     """Valida los permisos de un agente. Lanza AppError si no son aceptables.
 
     - acción prohibida → 422 GLOBAL_RESTRICTION
     - `approvals.create` fuera de un CTO → 422 GLOBAL_RESTRICTION
-    - acción desconocida / espacio de trabajo con forma de ruta / transición fuera del grafo → 400
+    - acción desconocida / transición fuera del grafo → 400
     """
     for action in permissions.actions:
         if action in FORBIDDEN_ACTIONS:
@@ -106,12 +103,6 @@ def check_permissions(role_type: RoleType, permissions: Permissions) -> None:
                 f"«{action}» solo puede tenerla un agente con role_type={only}",
                 [{"path": "permissions.actions", "message": f"solo {only}: {action}"}],
             )
-    bad_ws = [w for w in permissions.workspaces if not _WORKSPACE_ID.match(w)]
-    if bad_ws:
-        raise validation_error(
-            "permissions.workspaces: usa identificadores lógicos (api, front, docs), no rutas",
-            [{"path": "permissions.workspaces", "message": f"inválido: {w}"} for w in bad_ws],
-        )
     bad_tr = [t for t in permissions.ticket_transitions if t not in VALID_TRANSITIONS]
     if bad_tr:
         raise validation_error(
@@ -159,3 +150,18 @@ def generate_system_prompt(
         f"## Restricciones propias (nunca)\n{_bullets(own)}\n\n"
         f"## RESTRICCIONES GLOBALES (obligatorias y no negociables)\n{globals_block}"
     )
+
+
+def effective_access(
+    permissions: Permissions, *, kind: str, project_id: str | None
+) -> WorkspaceLevel:
+    """Acceso efectivo de un agente a un workspace (PERM01).
+
+    `folderAccess[kind]` solo si el proyecto del workspace está en el alcance; un workspace
+    sin proyecto solo lo ven los agentes con alcance "ALL".
+    """
+    scope = permissions.project_scope
+    if scope != "ALL" and (project_id is None or project_id not in scope):
+        return "none"
+    level: WorkspaceLevel = getattr(permissions.folder_access, kind, "none")
+    return level

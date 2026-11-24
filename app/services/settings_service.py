@@ -41,10 +41,17 @@ def put_project(
     db: Database, bus: EventBus | None, body: ProjectSettings, user_id: str | None = None
 ) -> ProjectSettings:
     before = _dump(get_project(db))
-    after = _dump(body)
+    stored = ProjectSettings(company_name=body.company_name.strip())  # solo la empresa
+    after = _dump(stored)
     changed = sorted(k for k, v in after.items() if before.get(k) != v)
     with db.transaction() as tx:
-        repo.put_value(tx, "project", json.dumps(after, ensure_ascii=False), user_id, now_iso())
+        repo.put_value(
+            tx,
+            "project",
+            json.dumps({"companyName": stored.company_name}, ensure_ascii=False),
+            user_id,
+            now_iso(),
+        )
         audit.record(
             tx,
             "settings.project_updated",
@@ -55,7 +62,7 @@ def put_project(
         )
     if bus is not None:
         bus.emit("settings.updated", {"key": "project", "value": after})
-    return body
+    return stored
 
 
 def put_limits(

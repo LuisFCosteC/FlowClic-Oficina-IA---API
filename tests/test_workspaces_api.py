@@ -13,10 +13,14 @@ def put(client: TestClient, ws_id: str, path: object, name: str = "API") -> obje
     return client.put(f"/api/admin/workspaces/{ws_id}", json={"name": name, "path": str(path)})
 
 
-def agent_with_ws(client: TestClient, ws: dict[str, str], name: str = "Zed") -> object:
+def agent_with_scope(client: TestClient, scope: object, name: str = "Zed") -> object:
     return client.post(
         "/api/agents",
-        json={"name": name, "role": "Dev", "permissions": {"workspaces": ws}},
+        json={
+            "name": name,
+            "role": "Dev",
+            "permissions": {"folderAccess": {"api": "read"}, "projectScope": scope},
+        },
     )
 
 
@@ -94,14 +98,9 @@ def test_carpetas_del_sistema_400(client: TestClient, path: str) -> None:
     assert "sistema" in r.json()["error"]["message"]  # type: ignore[attr-defined]
 
 
-def test_borrar_404_409_y_204(client: TestClient, tmp_path: Path) -> None:
+def test_borrar_404_y_204(client: TestClient, tmp_path: Path) -> None:
     assert client.delete("/api/admin/workspaces/api").status_code == 404
     put(client, "api", tmp_path)
-    assert agent_with_ws(client, {"api": "read"}).status_code == 201  # type: ignore[attr-defined]
-    r = client.delete("/api/admin/workspaces/api")
-    assert r.status_code == 409 and "Zed" in r.json()["error"]["message"]
-    agent_id = client.get("/api/agents").json()[0]["id"]
-    client.patch(f"/api/agents/{agent_id}", json={"permissions": {"workspaces": {}}})
     assert client.delete("/api/admin/workspaces/api").status_code == 204
     assert client.get("/api/admin/workspaces").json() == []
 
@@ -125,19 +124,20 @@ def test_check_no_lista_contenido(client: TestClient, tmp_path: Path) -> None:
     assert client.post("/api/admin/workspaces/nada/check").status_code == 404
 
 
-def test_agente_con_espacio_inexistente_da_400_y_con_existente_201(
+def test_agente_con_proyecto_inexistente_da_400_y_con_existente_201(
     client: TestClient, tmp_path: Path
 ) -> None:
-    r = agent_with_ws(client, {"api": "read"})
-    assert r.status_code == 400 and "api" in r.json()["error"]["message"]  # type: ignore[attr-defined]
+    r = agent_with_scope(client, ["web"])
+    assert r.status_code == 400 and "web" in r.json()["error"]["message"]  # type: ignore[attr-defined]
+    client.post("/api/admin/projects", json={"id": "web", "name": "Web"})
     put(client, "api", tmp_path)
-    r = agent_with_ws(client, {"api": "read"})
+    r = agent_with_scope(client, ["web"])
     assert r.status_code == 201  # type: ignore[attr-defined]
     agent = r.json()  # type: ignore[attr-defined]
     # la ruta nunca llega al agente ni a su prompt
     assert str(tmp_path) not in r.text  # type: ignore[attr-defined]
     assert str(tmp_path) not in agent["systemPrompt"]
     bad = client.patch(
-        f"/api/agents/{agent['id']}", json={"permissions": {"workspaces": {"x": "read"}}}
+        f"/api/agents/{agent['id']}", json={"permissions": {"projectScope": ["nada"]}}
     )
     assert bad.status_code == 400

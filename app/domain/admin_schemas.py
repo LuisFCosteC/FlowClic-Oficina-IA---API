@@ -13,6 +13,12 @@ StackItem = Annotated[str, Field(min_length=1, max_length=60)]
 
 
 class ProjectSettings(StrictInput):
+    """Ajustes de la EMPRESA (PRJ01). Los proyectos viven en `/api/admin/projects`.
+
+    Compatibilidad: `projectName`, `description`, `goals` y `stack` se siguen aceptando en el
+    PUT y se devuelven vacíos en el GET, pero ya NO se guardan (obsoletos).
+    """
+
     company_name: Annotated[str, Field(max_length=120)] = ""
     project_name: Annotated[str, Field(max_length=120)] = ""
     description: Annotated[str, Field(max_length=2000)] = ""

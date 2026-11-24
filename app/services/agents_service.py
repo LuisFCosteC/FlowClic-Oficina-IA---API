@@ -10,7 +10,7 @@ from app.errors import conflict, not_found, validation_error
 from app.events.bus import EventBus
 from app.repositories import agents_repo as repo
 from app.services import settings_service
-from app.services.workspaces_service import ensure_workspaces_exist
+from app.services.projects_service import ensure_projects_exist
 from app.util import new_id, now_iso
 
 DEFAULT_AVATAR = AgentAvatar(color="#06B6D4")
@@ -69,7 +69,7 @@ def create_agent(
 ) -> Agent:
     """Crea un agente (409 si el nombre ya lo usa uno activo) y emite `agent.created`."""
     agent = build_agent(data, agent_id=agent_id)
-    ensure_workspaces_exist(db, agent.permissions)
+    ensure_projects_exist(db, agent.permissions)
     _check_max_agents(db)
     if repo.find_active_by_name(db, agent.name) is not None:
         raise conflict(f"Ya existe un agente activo llamado «{agent.name}»")
@@ -166,7 +166,7 @@ def update_agent(db: Database, bus: EventBus | None, agent_id: str, patch: Agent
     merged = current.model_copy(update={k: getattr(patch, k) for k in changes})
     check_profile(merged.role_type, merged.permissions, merged.model, merged.limits)
     if "permissions" in changes:
-        ensure_workspaces_exist(db, merged.permissions)
+        ensure_projects_exist(db, merged.permissions)
     if "name" in changes:
         other = repo.find_active_by_name(db, merged.name.strip())
         if other is not None and other.id != agent_id:

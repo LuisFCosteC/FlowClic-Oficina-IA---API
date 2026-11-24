@@ -69,10 +69,15 @@ def test_put_project_guarda_emite_evento_y_audita_solo_campos(
         "goals": ["g1"],
         "stack": ["python"],
     }
-    assert client.put(PROJECT, json=body).json() == body
-    assert client.get(PROJECT).json() == body
+    # PRJ01: solo se guarda la empresa; los campos de proyecto son compatibilidad y vuelven vacíos
+    expected = {"companyName": "FlowClic", "projectName": "", "description": "", "goals": [],
+                "stack": []}
+    assert client.put(PROJECT, json=body).json() == expected
+    assert client.get(PROJECT).json() == expected
+    stored = migrated_db.fetch_one("SELECT value FROM app_settings WHERE key = 'project'")
+    assert stored is not None and stored["value"] == '{"companyName": "FlowClic"}'
     ev = [e for e in events if e.type == "settings.updated"]
-    assert ev[-1].payload == {"key": "project", "value": body}
+    assert ev[-1].payload == {"key": "project", "value": expected}
     row = migrated_db.fetch_one(
         "SELECT meta FROM audit_log WHERE action = 'settings.project_updated'"
     )

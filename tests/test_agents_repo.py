@@ -1,7 +1,14 @@
 import pytest
 
 from app.db.database import Database, IntegrityError
-from app.domain.schemas import Agent, AgentAvatar, Limits, ModelConfig, Permissions
+from app.domain.schemas import (
+    Agent,
+    AgentAvatar,
+    FolderAccess,
+    Limits,
+    ModelConfig,
+    Permissions,
+)
 from app.repositories import agents_repo as repo
 
 NOW = "2026-11-22T10:00:00.000Z"
@@ -21,7 +28,8 @@ def make(id_: str = "howard", name: str = "Howard", **over: object) -> Agent:
         "rules": ["Un ticket por sesión"],
         "restrictions": ["No tocar producción"],
         "permissions": Permissions(
-            workspaces={"api": "write", "docs": "read"},
+            folder_access=FolderAccess(api="write", docs="read"),
+            project_scope="ALL",
             actions=["repo.read", "git.commit_dev"],
             ticket_transitions=[("PENDING", "IN_PROGRESS"), ("IN_PROGRESS", "IN_QA")],
             only_assigned_tickets=True,

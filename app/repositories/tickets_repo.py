@@ -21,7 +21,8 @@ def row_to_ticket(r: Row) -> Ticket:
             "status": r["status"],
             "priority": r["priority"],
             "assigned_agent_id": r["assigned_agent_id"],
-            "project": r["project"],
+            "project_id": r["project_id"],
+            "project": r["project_name"],
             "model_tier": r["model_tier"],
             "estimated_cost_usd": r["estimated_cost_usd"],
             "position": r["position"],
@@ -37,22 +38,28 @@ def row_to_ticket(r: Row) -> Ticket:
     )
 
 
+_SELECT = (
+    "SELECT t.*, p.name AS project_name FROM tickets t LEFT JOIN projects p ON p.id = t.project_id"
+)
+
+
 def list_tickets(db: Database) -> list[Ticket]:
     rows = db.fetch_all(
-        f"SELECT * FROM tickets ORDER BY {_STATUS_ORDER}, position, updated_at DESC"  # noqa: S608
+        f"{_SELECT} ORDER BY {_STATUS_ORDER.replace('status', 't.status')},"  # noqa: S608
+        " t.position, t.updated_at DESC"
     )
     return [row_to_ticket(r) for r in rows]
 
 
 def get_ticket(db: Database, ticket_id: str) -> Ticket | None:
-    row = db.fetch_one("SELECT * FROM tickets WHERE id = ?", (ticket_id,))
+    row = db.fetch_one(f"{_SELECT} WHERE t.id = ?", (ticket_id,))  # noqa: S608
     return row_to_ticket(row) if row else None
 
 
 def insert_ticket(db: Database, t: Ticket) -> None:
     db.execute(
         "INSERT INTO tickets (id, title, description, status, priority, assigned_agent_id,"
-        " project, model_tier, estimated_cost_usd, position, created_at, updated_at,"
+        " project_id, model_tier, estimated_cost_usd, position, created_at, updated_at,"
         " objective, acceptance_criteria, actions, restrictions, dependencies, model)"
         " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
@@ -62,7 +69,7 @@ def insert_ticket(db: Database, t: Ticket) -> None:
             t.status,
             t.priority,
             t.assigned_agent_id,
-            t.project,
+            t.project_id,
             t.model_tier,
             t.estimated_cost_usd,
             t.position,

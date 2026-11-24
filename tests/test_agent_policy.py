@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from app.domain.agent_policy import (
     FORBIDDEN_ACTIONS,
@@ -69,14 +70,24 @@ def test_todas_las_acciones_validas_se_aceptan_salvo_approvals_para_no_cto() -> 
     assert not (FORBIDDEN_ACTIONS & VALID_ACTIONS)
 
 
-@pytest.mark.parametrize("ws", ["/etc", r"C:\proyectos", "../api", "api/src", "Api", ""])
-def test_los_espacios_de_trabajo_son_ids_logicos_no_rutas(ws: str) -> None:
-    assert code_of("CUSTOM", perms(workspaces={ws: "read"})) == "VALIDATION_ERROR"
+def test_niveles_y_tipos_invalidos_no_validan() -> None:
+    with pytest.raises(ValidationError):
+        perms(folderAccess={"api": "root"})
+    with pytest.raises(ValidationError):
+        perms(folderAccess={"cloud": "read"})
+    with pytest.raises(ValidationError):
+        perms(workspaces={"api": "read"})  # formato antiguo
+    with pytest.raises(ValidationError):
+        perms(projectScope="algunos")
+    with pytest.raises(ValidationError):
+        perms(projectScope=["No Valido"])
 
 
-def test_espacios_logicos_validos() -> None:
-    check_permissions("CUSTOM", perms(workspaces={"api": "write", "front": "none", "docs": "read"}))
-    check_permissions("QA", perms(workspaces={"api": "tests", "docs": "qa_report"}))
+def test_permisos_validos() -> None:
+    check_permissions("CUSTOM", perms(folderAccess={"api": "write", "docs": "read"}))
+    check_permissions("QA", perms(folderAccess={"api": "tests", "docs": "qa_report"}))
+    p = perms(projectScope="ALL")
+    assert p.project_scope == "ALL" and p.folder_access.mobile == "none"
 
 
 def test_transiciones_fuera_del_grafo_dan_400() -> None:

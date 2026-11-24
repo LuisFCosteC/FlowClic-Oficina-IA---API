@@ -70,13 +70,28 @@ def test_roles_modelos_y_limites_del_ceo() -> None:
 
 def test_permisos_del_ceo() -> None:
     t = {x.name: x.permissions for x in BASE_TEAM}
-    assert t["Sheldon"].workspaces == {"api": "read", "front": "read", "docs": "write"}
+    assert t["Sheldon"].folder_access.model_dump(exclude_defaults=True) == {
+        "api": "read",
+        "front": "read",
+        "docs": "write",
+    }
+    assert all(x.project_scope == "ALL" for x in t.values())
     assert "approvals.create" in t["Sheldon"].actions
     assert t["Sheldon"].ticket_transitions == [("IN_REVIEW", "DONE"), ("IN_REVIEW", "RETURNED")]
-    assert t["Leonard"].workspaces == {"api": "write", "front": "none", "docs": "read"}
-    assert t["Penny"].workspaces == {"api": "none", "front": "write", "docs": "read"}
+    assert t["Leonard"].folder_access.model_dump(exclude_defaults=True) == {
+        "api": "write",
+        "docs": "read",
+    }
+    assert t["Penny"].folder_access.model_dump(exclude_defaults=True) == {
+        "front": "write",
+        "docs": "read",
+    }
     assert "cmd.dev" in t["Penny"].actions and "cmd.dev" not in t["Leonard"].actions
-    assert t["Raj"].workspaces == {"api": "tests", "front": "tests", "docs": "qa_report"}
+    assert t["Raj"].folder_access.model_dump(exclude_defaults=True) == {
+        "api": "tests",
+        "front": "tests",
+        "docs": "qa_report",
+    }
     assert t["Raj"].ticket_transitions == [("IN_QA", "IN_REVIEW"), ("IN_QA", "RETURNED")]
     assert [x.only_assigned_tickets for x in t.values()] == [False, True, True, False]
     for name in ("Leonard", "Penny", "Raj"):

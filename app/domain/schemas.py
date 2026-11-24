@@ -18,9 +18,7 @@ ModelTier = Literal["opus_pro", "sonnet_pro", "haiku_flash"]
 ApprovalStatus = Literal["PENDING", "APPROVED", "REJECTED", "CANCELLED"]
 ApprovalCategory = Literal["Arquitectura", "Despliegue", "Seguridad", "Datos"]
 MemoryKind = Literal["NOTE", "DECISION"]
-HairStyle = Literal[
-    "short", "long", "curly", "bun", "parted", "ponytail", "spiky", "bob", "bald"
-]
+HairStyle = Literal["short", "long", "curly", "bun", "parted", "ponytail", "spiky", "bob", "bald"]
 Gender = Literal["male", "female", "neutral"]
 FaceStyle = Literal["neutral", "smile", "serious", "worried"]
 TopStyle = Literal["tshirt", "jacket", "hoodie", "suit", "dress"]
@@ -99,14 +97,33 @@ class AgentAvatar(StrictInput):
         return data
 
 
+ProjectId = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")]
 RoleType = Literal["CTO", "DEV_BACKEND", "DEV_FRONTEND", "QA", "CUSTOM"]
 WorkspaceLevel = Literal["none", "read", "tests", "qa_report", "write"]
 
 
-class Permissions(CamelModel):
-    """Permisos DUROS (los aplica la API). PLAN §19.3."""
+class FolderAccess(StrictInput):
+    """Nivel de acceso por TIPO de carpeta (PERM01); lo que no se indica es `none`."""
 
-    workspaces: dict[str, WorkspaceLevel] = Field(default_factory=dict)
+    api: WorkspaceLevel = "none"
+    front: WorkspaceLevel = "none"
+    docs: WorkspaceLevel = "none"
+    mobile: WorkspaceLevel = "none"
+    other: WorkspaceLevel = "none"
+
+
+class Permissions(StrictInput):
+    """Permisos DUROS (los aplica la API). PLAN §19.3 + PERM01.
+
+    Acceso efectivo a un workspace W = `folder_access[W.kind]`, solo si `W.project_id` está en
+    `project_scope` ("ALL" incluye los proyectos futuros). Un workspace sin proyecto solo lo ven
+    los agentes con alcance "ALL".
+    """
+
+    folder_access: FolderAccess = Field(default_factory=FolderAccess)
+    project_scope: Literal["ALL"] | Annotated[list[ProjectId], Field(max_length=200)] = Field(
+        default_factory=list
+    )
     actions: list[str] = Field(default_factory=list)
     ticket_transitions: list[tuple[TicketStatus, TicketStatus]] = Field(default_factory=list)
     only_assigned_tickets: bool = True
@@ -203,7 +220,8 @@ class Ticket(CamelModel):
     status: TicketStatus
     priority: Priority
     assigned_agent_id: str | None
-    project: str | None
+    project_id: str | None = None
+    project: str | None = None  # nombre del proyecto (solo lectura, derivado de project_id)
     model_tier: ModelTier
     estimated_cost_usd: float
     position: int
@@ -223,7 +241,7 @@ class TicketCreate(StrictInput):
     status: TicketStatus | None = None
     priority: Priority | None = None
     assigned_agent_id: Ref | None = None
-    project: ProjectName | None = None
+    project_id: Ref | None = None
     model_tier: ModelTier | None = None
     estimated_cost_usd: Money | None = None
     objective: LongText | None = None
@@ -238,7 +256,7 @@ class TicketUpdate(StrictInput):
     title: Title | None = None
     description: LongText | None = None
     priority: Priority | None = None
-    project: ProjectName | None = None
+    project_id: Ref | None = None
     model_tier: ModelTier | None = None
     estimated_cost_usd: Money | None = None
     position: Annotated[int, Field(ge=0, le=100_000)] | None = None
@@ -450,17 +468,69 @@ class StatusSummary(CamelModel):
 
 
 # ── Espacios de trabajo (J03) ────────────────────────────────────────────────────────────────
+WorkspaceKind = Literal["api", "front", "docs", "mobile", "other"]
+WORKSPACE_KINDS: tuple[WorkspaceKind, ...] = ("api", "front", "docs", "mobile", "other")
+ProjectStatus = Literal["ACTIVE", "ARCHIVED"]
+
+
 class Workspace(CamelModel):
     id: str
     name: str
     path: str
+    project_id: str | None = None
+    kind: WorkspaceKind = "other"
     created_at: str
     updated_at: str
 
 
 class WorkspaceBody(StrictInput):
+    """`projectId` y `kind` opcionales: al editar, lo que no se envía se conserva."""
+
     name: Name
     path: Annotated[str, Field(min_length=1, max_length=500)]
+    project_id: ProjectId | None = None
+    kind: WorkspaceKind | None = None
+
+
+class AgentWorkspaceView(CamelModel):
+    """Vista de un workspace para un agente: sin ruta local."""
+
+    id: str
+    name: str
+    kind: WorkspaceKind
+    project_id: str | None
+    access: WorkspaceLevel
+
+
+# ── Proyectos (PRJ01) ────────────────────────────────────────────────────────────────────────
+_Goal = Annotated[str, Field(min_length=1, max_length=200)]
+_StackItem = Annotated[str, Field(min_length=1, max_length=60)]
+
+
+class Project(CamelModel):
+    id: str
+    name: str
+    description: str
+    goals: list[str]
+    stack: list[str]
+    status: ProjectStatus
+    created_at: str
+    updated_at: str
+
+
+class ProjectCreate(StrictInput):
+    id: ProjectId
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    description: Annotated[str, Field(max_length=2000)] = ""
+    goals: Annotated[list[_Goal], Field(max_length=20)] = Field(default_factory=list)
+    stack: Annotated[list[_StackItem], Field(max_length=30)] = Field(default_factory=list)
+
+
+class ProjectUpdate(StrictInput):
+    name: Annotated[str, Field(min_length=1, max_length=120)] | None = None
+    description: Annotated[str, Field(max_length=2000)] | None = None
+    goals: Annotated[list[_Goal], Field(max_length=20)] | None = None
+    stack: Annotated[list[_StackItem], Field(max_length=30)] | None = None
 
 
 class WorkspaceCheck(CamelModel):

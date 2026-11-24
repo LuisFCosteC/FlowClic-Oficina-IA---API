@@ -17,6 +17,7 @@ from app.realtime.sse import SSEHub
 from app.routers import (
     admin_credentials,
     admin_db,
+    admin_projects,
     admin_settings,
     admin_users,
     admin_workspaces,
@@ -125,6 +126,7 @@ def create_app(
     app.include_router(tickets.router)
     app.include_router(admin_credentials.router)
     app.include_router(admin_workspaces.router)
+    app.include_router(admin_projects.router)
     app.include_router(admin_db.router)
     app.include_router(admin_settings.router)
     app.include_router(admin_users.router)

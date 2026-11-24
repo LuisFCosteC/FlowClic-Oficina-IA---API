@@ -23,7 +23,7 @@ TICKETS: list[dict[str, str]] = [
         "description": "Reunir requisitos y secciones de la landing.",
         "status": "PENDING",
         "priority": "MEDIUM",
-        "project": "FlowClic Web",
+        "project": "flowclic-web",
     },
     {
         "id": "seed-ticket-2",
@@ -31,7 +31,7 @@ TICKETS: list[dict[str, str]] = [
         "description": "Tablas y relaciones iniciales.",
         "status": "IN_PROGRESS",
         "priority": "HIGH",
-        "project": "FlowClic CRM",
+        "project": "flowclic-crm",
     },
     {
         "id": "seed-ticket-3",
@@ -39,7 +39,7 @@ TICKETS: list[dict[str, str]] = [
         "description": "Pendiente de la revisión de QA.",
         "status": "IN_QA",
         "priority": "MEDIUM",
-        "project": "FlowClic CRM",
+        "project": "flowclic-crm",
     },
     {
         "id": "seed-ticket-4",
@@ -47,7 +47,7 @@ TICKETS: list[dict[str, str]] = [
         "description": "Revisado por QA; pendiente de la compuerta de producción.",
         "status": "IN_REVIEW",
         "priority": "HIGH",
-        "project": "FlowClic Web",
+        "project": "flowclic-web",
     },
 ]
 
@@ -72,10 +72,16 @@ def seed(db: Database) -> None:
     seed_demo_agents(db)  # 4 agentes de demostración (idempotente)
     now = now_iso()
     with db.transaction() as tx:
+        for pid, pname in (("flowclic-web", "FlowClic Web"), ("flowclic-crm", "FlowClic CRM")):
+            tx.execute(
+                "INSERT INTO projects (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
+                " ON CONFLICT(id) DO NOTHING",
+                (pid, pname, now, now),
+            )
         for i, t in enumerate(TICKETS):
             tx.execute(
                 "INSERT INTO tickets"
-                " (id, title, description, status, priority, project, position, created_at,"
+                " (id, title, description, status, priority, project_id, position, created_at,"
                 " updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
                 (
                     t["id"],
@@ -106,7 +112,7 @@ def seed(db: Database) -> None:
         tx.execute(
             "INSERT INTO project_memory (id, kind, title, content, project, author,"
             " created_at, updated_at) VALUES ('seed-memory-1', 'NOTE', 'Convenciones del proyecto',"
-            " 'Usar tipado estricto y commits pequeños.', 'FlowClic Web', 'human', ?, ?)"
+            " 'Usar tipado estricto y commits pequeños.', 'flowclic-web', 'human', ?, ?)"
             " ON CONFLICT(id) DO NOTHING",
             (now, now),
         )

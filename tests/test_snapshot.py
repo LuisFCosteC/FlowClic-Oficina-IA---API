@@ -9,9 +9,14 @@ def test_snapshot_de_la_bd_vacia(client: TestClient) -> None:
     r = client.get("/api/snapshot")
     assert r.status_code == 200
     body = r.json()
-    assert body["agents"] == [] and body["tickets"] == [] and body["approvals"] == []
+    assert (
+        body["agents"] == []
+        and body["tickets"] == []
+        and body["approvals"] == []
+        and body["projects"] == []
+    )
     assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$", body["serverTime"])
-    assert set(body) == {"agents", "tickets", "approvals", "serverTime"}
+    assert set(body) == {"agents", "tickets", "approvals", "projects", "serverTime"}
 
 
 def test_devuelve_los_4_agentes_demo_tras_cargarlos(

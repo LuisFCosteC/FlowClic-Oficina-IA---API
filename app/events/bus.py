@@ -34,6 +34,10 @@ EventType = Literal[
     "rule.updated",
     "rule.deleted",
     "system.db_changed",
+    "project.created",
+    "project.updated",
+    "project.archived",
+    "key.updated",
 ]
 
 
