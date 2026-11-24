@@ -21,6 +21,7 @@ class ModelInfo(CamelModel):
     id: str
     label: str
     provider: str
+    api_model: str
     has_connection: bool
 
 
@@ -35,6 +36,7 @@ def list_models(db: Annotated[Database, Depends(get_db)]) -> list[ModelInfo]:
             id=m.id,
             label=m.label,
             provider=m.provider,
+            api_model=m.api_model,
             has_connection=key_pool.has_usable_key(db, m.provider, m.id),
         )
         for m in MODELS_CATALOG

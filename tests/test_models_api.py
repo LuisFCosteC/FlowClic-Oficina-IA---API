@@ -20,9 +20,12 @@ def test_catalogo_completo_en_camel_case_sin_conexiones(client: TestClient) -> N
         "id": "claude-opus-5-5",
         "label": "Claude Opus 5.5",
         "provider": "anthropic",
+        "apiModel": "claude-opus-5-5",
         "hasConnection": False,
     }
     assert models["gemini-flash"]["provider"] == "google"
+    assert models["gemini-pro"]["apiModel"] == "gemini-2.5-pro"
+    assert models["gemini-flash"]["apiModel"] == "gemini-2.5-flash"
     assert all(m["hasConnection"] is False for m in models.values())
 
 
