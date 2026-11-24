@@ -109,4 +109,4 @@ def test_todas_las_plantillas_pasan_la_politica_y_generan_prompt_con_las_globale
             rules=t.rules,
             restrictions=t.restrictions,
         )
-        assert prompt.endswith(GLOBAL_RESTRICTIONS[4])
+        assert prompt.endswith(GLOBAL_RESTRICTIONS[-1])

@@ -38,7 +38,7 @@ def test_crear_howard_desde_curl_lo_devuelve_el_listado(client: TestClient) -> N
     assert created["roleType"] == "CUSTOM"
     assert created["isCto"] is False
     assert created["consecutiveFailures"] == 0
-    assert created["systemPrompt"].endswith(GLOBAL_RESTRICTIONS[4])
+    assert created["systemPrompt"].endswith(GLOBAL_RESTRICTIONS[-1])
     assert created["model"]["primary"] == "claude-sonnet-5-5"
     listed = client.get("/api/agents").json()
     assert [a["id"] for a in listed] == [created["id"]]
@@ -106,7 +106,7 @@ def test_las_globales_van_en_el_prompt_aunque_el_cliente_mande_otras(client: Tes
     prompt = created["systemPrompt"]
     for g in GLOBAL_RESTRICTIONS:
         assert g in prompt
-    assert prompt.endswith(GLOBAL_RESTRICTIONS[4])
+    assert prompt.endswith(GLOBAL_RESTRICTIONS[-1])
     assert prompt.count(GLOBAL_RESTRICTIONS[0]) == 1
 
 
@@ -119,7 +119,7 @@ def test_patch_cambia_el_rol_y_regenera_el_prompt(client: TestClient) -> None:
     body = r.json()
     assert body["role"] == "Ingeniero"
     assert "Diseñar PCB" in body["systemPrompt"] and "Soldar" not in body["systemPrompt"]
-    assert body["systemPrompt"].endswith(GLOBAL_RESTRICTIONS[4])
+    assert body["systemPrompt"].endswith(GLOBAL_RESTRICTIONS[-1])
     assert body["name"] == "Howard" and body["updatedAt"] >= a["updatedAt"]
 
 

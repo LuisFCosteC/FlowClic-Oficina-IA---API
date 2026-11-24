@@ -6,7 +6,7 @@ Pendiente: `actingAgentId` y permisos por agente (S09), edición/reasignación/b
 import json
 
 from app.db.database import Database
-from app.domain.agent_policy import GLOBAL_RESTRICTIONS
+from app.domain.agent_policy import GLOBAL_RESTRICTIONS, is_self_review
 from app.domain.models_catalog import MODEL_IDS
 from app.domain.schemas import (
     Agent,
@@ -262,6 +262,12 @@ def authorize_agent_transition(db: Database, agent_id: str, ticket: Ticket, to: 
             "TRANSITION_FORBIDDEN",
             f"{agent.name} no puede pasar un ticket de {STATUS_LABEL[ticket.status]} "
             f"a {STATUS_LABEL[to]}",
+        )
+    if is_self_review(agent.id, ticket.assigned_agent_id, ticket.kind, pair):
+        raise AppError(
+            "TRANSITION_FORBIDDEN",
+            f"{agent.name} no puede aprobar ni devolver su propio trabajo "
+            "(restricción global 6: nadie autoaprueba)",
         )
     if agent.permissions.only_assigned_tickets and ticket.assigned_agent_id != agent.id:
         raise AppError(

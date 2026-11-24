@@ -26,7 +26,8 @@ def code_of(role: str, p: Permissions) -> str:
 
 
 def test_son_cinco_restricciones_globales_con_el_texto_del_ceo() -> None:
-    assert len(GLOBAL_RESTRICTIONS) == 5
+    assert len(GLOBAL_RESTRICTIONS) == 6
+    assert "autoaprobar" in GLOBAL_RESTRICTIONS[5]
     assert GLOBAL_RESTRICTIONS[0].startswith("Ningún agente hace merge a `main`")
     assert GLOBAL_RESTRICTIONS[3] == "Solo Sheldon puede hablar con el CEO y crear aprobaciones."
     assert "3 fallos seguidos" in GLOBAL_RESTRICTIONS[4]
@@ -143,7 +144,7 @@ def test_el_prompt_siempre_termina_con_las_5_globales() -> None:
     assert (
         "Soldar" in prompt and "Un ticket por sesión" in prompt and "No tocar producción" in prompt
     )
-    assert prompt.endswith(GLOBAL_RESTRICTIONS[4])
+    assert prompt.endswith(GLOBAL_RESTRICTIONS[-1])
     for i, g in enumerate(GLOBAL_RESTRICTIONS, start=1):
         assert f"{i}. {g}" in prompt
 
@@ -161,8 +162,8 @@ def test_el_prompt_ignora_lo_que_el_cliente_envie_para_las_globales() -> None:
     assert prompt.count(GLOBAL_RESTRICTIONS[0]) == 1  # solo en la sección global
     for g in GLOBAL_RESTRICTIONS:
         assert g in prompt
-    assert prompt.endswith(GLOBAL_RESTRICTIONS[4])
-    assert prompt.rstrip().splitlines()[-1].startswith("5. ")
+    assert prompt.endswith(GLOBAL_RESTRICTIONS[-1])
+    assert prompt.rstrip().splitlines()[-1].startswith("6. ")
 
 
 def test_prompt_con_listas_vacias() -> None:
@@ -170,4 +171,4 @@ def test_prompt_con_listas_vacias() -> None:
         name="A", role="r", role_type="QA", functions=[], rules=[], restrictions=[]
     )
     assert "(ninguna)" in prompt
-    assert prompt.endswith(GLOBAL_RESTRICTIONS[4])
+    assert prompt.endswith(GLOBAL_RESTRICTIONS[-1])
