@@ -81,7 +81,14 @@ class AuthMiddleware:
             return
 
         token = Request(scope).cookies.get(COOKIE_NAME)
-        principal = principal_for_token(db, settings, token)
+        try:
+            principal = principal_for_token(db, settings, token)
+        except Exception:  # noqa: BLE001 - BD inalcanzable (Turso/red): 503 con CORS, no un 500 mudo
+            response = error_response(
+                503, "DB_UNAVAILABLE", "La base de datos no responde; reintenta en unos segundos"
+            )
+            await response(scope, receive, send)
+            return
         if principal is None:
             response = error_response(401, "UNAUTHENTICATED", "Inicia sesión para continuar")
             await response(scope, receive, send)
