@@ -31,7 +31,7 @@ def make(id_: str = "howard", name: str = "Howard", **over: object) -> Agent:
             folder_access=FolderAccess(api="write", docs="read"),
             project_scope="ALL",
             actions=["repo.read", "git.commit_dev"],
-            ticket_transitions=[("PENDING", "IN_PROGRESS"), ("IN_PROGRESS", "IN_QA")],
+            ticket_transitions=[("PENDING", "IN_PROGRESS"), ("IN_PROGRESS", "IN_SENIOR_REVIEW")],
             only_assigned_tickets=True,
         ),
         "model": ModelConfig(
@@ -59,7 +59,7 @@ def test_insert_y_get_ida_y_vuelta_con_todos_los_campos_de_perfil(migrated_db: D
     assert got is not None
     assert got.permissions.ticket_transitions == [
         ("PENDING", "IN_PROGRESS"),
-        ("IN_PROGRESS", "IN_QA"),
+        ("IN_PROGRESS", "IN_SENIOR_REVIEW"),
     ]
     assert got.model.fallback == "claude-opus-5-5"
     assert got.limits.max_usd_per_day == 8

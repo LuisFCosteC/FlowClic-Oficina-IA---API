@@ -30,11 +30,15 @@ def move(c: TestClient, tid: str, to: str, acting: str | None = None) -> Any:
 
 
 def test_el_grafo_tiene_las_dos_revisiones() -> None:
-    assert ("IN_QA", "IN_SENIOR_REVIEW") in VALID_TRANSITIONS
-    assert ("IN_SENIOR_REVIEW", "IN_REVIEW") in VALID_TRANSITIONS
+    # el senior revisa ANTES que QA
+    assert ("IN_PROGRESS", "IN_SENIOR_REVIEW") in VALID_TRANSITIONS
+    assert ("IN_SENIOR_REVIEW", "IN_QA") in VALID_TRANSITIONS
     assert ("IN_SENIOR_REVIEW", "RETURNED") in VALID_TRANSITIONS
-    assert ("IN_QA", "IN_REVIEW") not in VALID_TRANSITIONS  # ya no se salta la revisión senior
-    assert can_transition("IN_QA", "IN_REVIEW") == "INVALID"
+    assert ("IN_QA", "IN_REVIEW") in VALID_TRANSITIONS
+    assert ("IN_QA", "RETURNED") in VALID_TRANSITIONS
+    assert ("IN_PROGRESS", "IN_QA") not in VALID_TRANSITIONS  # no se salta la revisión senior
+    assert ("IN_SENIOR_REVIEW", "IN_REVIEW") not in VALID_TRANSITIONS  # ni la de QA
+    assert can_transition("IN_PROGRESS", "IN_QA") == "INVALID"
     assert can_transition("IN_SENIOR_REVIEW", "DONE") == "INVALID"
     assert len(VALID_TRANSITIONS) == 9
 
@@ -44,8 +48,8 @@ def test_flujo_completo_con_las_dos_revisiones_y_efecto_en_el_agente(client: Tes
     tid = str(make_ticket(assigned_agent_id=dev["id"])["id"])
     for to, agent_status in [
         ("IN_PROGRESS", "WORKING"),
-        ("IN_QA", "REVIEW"),
         ("IN_SENIOR_REVIEW", "REVIEW"),
+        ("IN_QA", "REVIEW"),
         ("IN_REVIEW", "REVIEW"),
         ("DONE", "IDLE"),
     ]:
@@ -53,15 +57,15 @@ def test_flujo_completo_con_las_dos_revisiones_y_efecto_en_el_agente(client: Tes
         assert r.status_code == 200, (to, r.text)
         assert r.json()["status"] == to
         assert client.get(f"/api/agents/{dev['id']}").json()["status"] == agent_status
-    bad = move(client, make_ticket()["id"], "IN_SENIOR_REVIEW")  # PENDING → senior: inválida
+    bad = move(client, make_ticket()["id"], "IN_QA")  # PENDING → QA: inválida
     assert bad.status_code == 409 and bad.json()["error"]["code"] == "INVALID_TRANSITION"
-    assert "REVISIÓN SENIOR" in bad.json()["error"]["message"]
+    assert "EN QA" in bad.json()["error"]["message"]
 
 
 def test_devuelta_desde_cada_revision(client: TestClient) -> None:
-    for stop in ("IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW"):
+    for stop in ("IN_SENIOR_REVIEW", "IN_QA", "IN_REVIEW"):
         tid = str(make_ticket()["id"])
-        for to in ("IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW"):
+        for to in ("IN_PROGRESS", "IN_SENIOR_REVIEW", "IN_QA", "IN_REVIEW"):
             move(client, tid, to)
             if to == stop:
                 break
@@ -75,9 +79,7 @@ def test_403_por_actingagentid(client: TestClient) -> None:
     senior = agent(
         client,
         "Leonard",
-        permissions=perms(
-            [["IN_SENIOR_REVIEW", "IN_REVIEW"], ["IN_SENIOR_REVIEW", "RETURNED"]], False
-        ),
+        permissions=perms([["IN_SENIOR_REVIEW", "IN_QA"], ["IN_SENIOR_REVIEW", "RETURNED"]], False),
     )
     tid = str(make_ticket(assigned_agent_id=dev["id"])["id"])
     # sin la pareja en sus permisos
@@ -94,7 +96,7 @@ def test_403_por_actingagentid(client: TestClient) -> None:
     inv = move(client, tid, "DONE", acting=other["id"])
     assert inv.status_code == 409 and inv.json()["error"]["code"] == "INVALID_TRANSITION"
     # agente inexistente → 400
-    assert move(client, tid, "IN_QA", acting="nadie").status_code == 400
+    assert move(client, tid, "IN_SENIOR_REVIEW", acting="nadie").status_code == 400
 
 
 def test_revisor_senior_no_asignado_si_only_assigned_false(client: TestClient) -> None:
@@ -102,14 +104,12 @@ def test_revisor_senior_no_asignado_si_only_assigned_false(client: TestClient) -
     senior = agent(
         client,
         "Leonard",
-        permissions=perms(
-            [["IN_SENIOR_REVIEW", "IN_REVIEW"], ["IN_SENIOR_REVIEW", "RETURNED"]], False
-        ),
+        permissions=perms([["IN_SENIOR_REVIEW", "IN_QA"], ["IN_SENIOR_REVIEW", "RETURNED"]], False),
     )
     tid = str(make_ticket(assigned_agent_id=dev["id"])["id"])
-    for to in ("IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW"):
+    for to in ("IN_PROGRESS", "IN_SENIOR_REVIEW"):
         move(client, tid, to)
-    ok = move(client, tid, "IN_REVIEW", acting=senior["id"])
+    ok = move(client, tid, "IN_QA", acting=senior["id"])
     assert ok.status_code == 200
 
 
@@ -117,7 +117,7 @@ def test_el_evento_guarda_al_agente_como_actor(client: TestClient, migrated_db: 
     dev = agent(client, "Penny", permissions=perms([["PENDING", "IN_PROGRESS"]]))
     tid = str(make_ticket(assigned_agent_id=dev["id"])["id"])
     move(client, tid, "IN_PROGRESS", acting=dev["id"])
-    move(client, tid, "IN_QA")
+    move(client, tid, "IN_SENIOR_REVIEW")
     rows = migrated_db.fetch_all(
         "SELECT actor, payload FROM ticket_events WHERE ticket_id = ? AND type = 'STATUS_CHANGED'"
         " ORDER BY created_at",
@@ -153,7 +153,7 @@ def request_with_subtasks(client: TestClient) -> dict[str, Any]:
 
 
 def finish(c: TestClient, tid: str) -> None:
-    for to in ("IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW", "DONE"):
+    for to in ("IN_PROGRESS", "IN_SENIOR_REVIEW", "IN_QA", "IN_REVIEW", "DONE"):
         assert move(c, tid, to).status_code == 200
 
 
@@ -161,7 +161,7 @@ def test_un_pedido_no_se_cierra_con_subtareas_abiertas(
     client: TestClient, request_with_subtasks: dict[str, Any]
 ) -> None:
     req = request_with_subtasks["request"]
-    for to in ("IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW"):
+    for to in ("IN_PROGRESS", "IN_SENIOR_REVIEW", "IN_QA", "IN_REVIEW"):
         assert move(client, req, to).status_code == 200
     r = move(client, req, "DONE")
     assert r.status_code == 409 and r.json()["error"]["code"] == "SUBTASKS_PENDING"

@@ -218,7 +218,7 @@ def test_resumen_refleja_el_ticket_actual_y_el_siguiente_paso(
     assert s["ticket"]["description"] == "Criterio: login con scrypt"
     assert s["ticket"]["sinceSeconds"] >= 0
     assert s["openTickets"] == {"IN_PROGRESS": 1}
-    assert s["nextStep"] == "Terminar y pasar a QA (IN_PROGRESS → IN_QA)."
+    assert s["nextStep"] == "Terminar y pasar a revisión senior (IN_PROGRESS → IN_SENIOR_REVIEW)."
     migrated_db.execute("UPDATE tickets SET status = 'IN_QA' WHERE id = 't1'")
     assert "revisión de QA" in summary(client, "leonard")["nextStep"]
     migrated_db.execute("UPDATE tickets SET status = 'RETURNED' WHERE id = 't1'")

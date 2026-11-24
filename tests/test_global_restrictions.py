@@ -140,9 +140,8 @@ def test_r6_un_agente_no_aprueba_su_propio_trabajo(client: TestClient) -> None:
             "permissions": {
                 "ticketTransitions": [
                     ["PENDING", "IN_PROGRESS"],
-                    ["IN_PROGRESS", "IN_QA"],
-                    ["IN_QA", "IN_SENIOR_REVIEW"],
-                    ["IN_SENIOR_REVIEW", "IN_REVIEW"],
+                    ["IN_PROGRESS", "IN_SENIOR_REVIEW"],
+                    ["IN_SENIOR_REVIEW", "IN_QA"],
                 ],
                 "onlyAssignedTickets": False,
             },
@@ -158,18 +157,15 @@ def test_r6_un_agente_no_aprueba_su_propio_trabajo(client: TestClient) -> None:
 
     for tid in (mine, theirs):
         assert move(tid, "IN_PROGRESS").status_code == 200
-        assert move(tid, "IN_QA").status_code == 200
-    # su propio ticket: no puede pasarlo de EN QA a la revisión senior
-    r = move(mine, "IN_SENIOR_REVIEW")
+        assert move(tid, "IN_SENIOR_REVIEW").status_code == 200
+    # su propio ticket: no puede aprobar su propia revisión senior
+    r = move(mine, "IN_QA")
     assert r.status_code == 403 and "autoaprueba" in r.json()["error"]["message"]
-    assert client.get(f"/api/tickets/{mine}").json()["status"] == "IN_QA"
+    assert client.get(f"/api/tickets/{mine}").json()["status"] == "IN_SENIOR_REVIEW"
     # el de otro sí
-    assert move(theirs, "IN_SENIOR_REVIEW").status_code == 200
+    assert move(theirs, "IN_QA").status_code == 200
     # el humano (CEO) sí puede mover cualquiera
-    assert (
-        client.post(f"/api/tickets/{mine}/transition", json={"to": "IN_SENIOR_REVIEW"}).status_code
-        == 200
-    )
+    assert client.post(f"/api/tickets/{mine}/transition", json={"to": "IN_QA"}).status_code == 200
 
 
 def test_las_restricciones_de_un_ticket_no_pueden_quitar_las_globales(client: TestClient) -> None:

@@ -68,11 +68,11 @@ ACTIONS_ONLY_FOR: dict[str, RoleType] = {"approvals.create": "CTO"}
 VALID_TRANSITIONS: frozenset[tuple[TicketStatus, TicketStatus]] = frozenset(
     {
         ("PENDING", "IN_PROGRESS"),
-        ("IN_PROGRESS", "IN_QA"),
-        ("IN_QA", "IN_SENIOR_REVIEW"),
-        ("IN_QA", "RETURNED"),
-        ("IN_SENIOR_REVIEW", "IN_REVIEW"),
+        ("IN_PROGRESS", "IN_SENIOR_REVIEW"),
+        ("IN_SENIOR_REVIEW", "IN_QA"),
         ("IN_SENIOR_REVIEW", "RETURNED"),
+        ("IN_QA", "IN_REVIEW"),
+        ("IN_QA", "RETURNED"),
         ("IN_REVIEW", "DONE"),
         ("IN_REVIEW", "RETURNED"),
         ("RETURNED", "IN_PROGRESS"),
@@ -183,10 +183,10 @@ _SENSITIVE_DIRS = (".ssh", ".aws", ".gnupg")
 _ENV_SAFE = (".env.example", ".env.sample", ".env.template")
 REVIEW_TRANSITIONS: frozenset[tuple[TicketStatus, TicketStatus]] = frozenset(
     {
-        ("IN_QA", "IN_SENIOR_REVIEW"),
-        ("IN_QA", "RETURNED"),
-        ("IN_SENIOR_REVIEW", "IN_REVIEW"),
+        ("IN_SENIOR_REVIEW", "IN_QA"),
         ("IN_SENIOR_REVIEW", "RETURNED"),
+        ("IN_QA", "IN_REVIEW"),
+        ("IN_QA", "RETURNED"),
         ("IN_REVIEW", "DONE"),
         ("IN_REVIEW", "RETURNED"),
     }

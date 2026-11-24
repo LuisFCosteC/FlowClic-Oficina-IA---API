@@ -30,7 +30,9 @@ def _agent_status(c: TestClient, aid: str) -> str:
     ("cur", "to", "expected"),
     [
         ("PENDING", "IN_PROGRESS", "ALLOWED"),
-        ("IN_PROGRESS", "IN_QA", "ALLOWED"),
+        ("IN_PROGRESS", "IN_SENIOR_REVIEW", "ALLOWED"),
+        ("IN_SENIOR_REVIEW", "IN_QA", "ALLOWED"),
+        ("IN_PROGRESS", "IN_QA", "INVALID"),
         ("IN_QA", "RETURNED", "ALLOWED"),
         ("RETURNED", "IN_PROGRESS", "ALLOWED"),
         ("IN_REVIEW", "DONE", "ALLOWED"),
@@ -65,11 +67,11 @@ def test_full_flow_updates_agent(client: TestClient, migrated_db: Database) -> N
     tid = _ticket(client, aid)["id"]
     assert _move(client, tid, "IN_PROGRESS").status_code == 200
     assert _agent_status(client, aid) == "WORKING"
-    assert _move(client, tid, "IN_QA").json()["status"] == "IN_QA"
+    assert _move(client, tid, "IN_SENIOR_REVIEW").json()["status"] == "IN_SENIOR_REVIEW"
     assert _agent_status(client, aid) == "REVIEW"
     assert _move(client, tid, "RETURNED").status_code == 200
     assert _agent_status(client, aid) == "WORKING"
-    for to in ("IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW", "DONE"):
+    for to in ("IN_PROGRESS", "IN_SENIOR_REVIEW", "IN_QA", "IN_REVIEW", "DONE"):
         assert _move(client, tid, to).status_code == 200, to
     assert _agent_status(client, aid) == "IDLE"
     ev = migrated_db.fetch_all(
@@ -97,7 +99,7 @@ def test_done_keeps_agent_busy_with_other_active(client: TestClient) -> None:
     t1 = _ticket(client, aid, "A")["id"]
     t2 = _ticket(client, aid, "B")["id"]
     _move(client, t2, "IN_PROGRESS")
-    for to in ("IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW", "DONE"):
+    for to in ("IN_PROGRESS", "IN_SENIOR_REVIEW", "IN_QA", "IN_REVIEW", "DONE"):
         _move(client, t1, to)
     assert _agent_status(client, aid) != "IDLE"
 
@@ -112,7 +114,7 @@ def test_r1_blocked_agent_untouched(client: TestClient) -> None:
 
 def test_gate_pending_blocks_done(client: TestClient, migrated_db: Database) -> None:
     tid = _ticket(client)["id"]
-    for to in ("IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW"):
+    for to in ("IN_PROGRESS", "IN_SENIOR_REVIEW", "IN_QA", "IN_REVIEW"):
         _move(client, tid, to)
     migrated_db.execute(
         "INSERT INTO approvals (id, ticket_id, title, gate, requested_at)"

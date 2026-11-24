@@ -14,8 +14,8 @@ Decision = Literal["ALLOWED", "INVALID", "NOOP"]
 # Estados en los que el ticket "ocupa" a su agente (para decidir si vuelve a IDLE).
 ACTIVE_STATUSES: tuple[TicketStatus, ...] = (
     "IN_PROGRESS",
-    "IN_QA",
     "IN_SENIOR_REVIEW",
+    "IN_QA",
     "IN_REVIEW",
     "RETURNED",
 )
@@ -34,6 +34,6 @@ def agent_status_for(to: TicketStatus) -> AgentStatus | None:
     """Efecto en el agente asignado. `None` = IDLE solo si no le quedan tickets activos."""
     if to in ("IN_PROGRESS", "RETURNED"):
         return "WORKING"
-    if to in ("IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW"):
+    if to in ("IN_SENIOR_REVIEW", "IN_QA", "IN_REVIEW"):
         return "REVIEW"
     return None

@@ -98,16 +98,16 @@ def get_thread(
 _TICKET_PRIORITY = (
     "IN_PROGRESS",
     "RETURNED",
-    "IN_QA",
     "IN_SENIOR_REVIEW",
+    "IN_QA",
     "IN_REVIEW",
     "PENDING",
 )
 _NEXT_STEP = {
     "PENDING": "Iniciar el ticket (PENDING → IN_PROGRESS).",
-    "IN_PROGRESS": "Terminar y pasar a QA (IN_PROGRESS → IN_QA).",
-    "IN_QA": "Esperar la revisión de QA: pasa a IN_SENIOR_REVIEW o vuelve como RETURNED.",
-    "IN_SENIOR_REVIEW": "Esperar la revisión senior: pasa a IN_REVIEW o vuelve como RETURNED.",
+    "IN_PROGRESS": "Terminar y pasar a revisión senior (IN_PROGRESS → IN_SENIOR_REVIEW).",
+    "IN_SENIOR_REVIEW": "Esperar la revisión senior: pasa a IN_QA o vuelve como RETURNED.",
+    "IN_QA": "Esperar la revisión de QA: pasa a IN_REVIEW o vuelve como RETURNED.",
     "IN_REVIEW": "Esperar la revisión del CTO: DONE o RETURNED.",
     "RETURNED": "Corregir lo devuelto y retomar el ticket (RETURNED → IN_PROGRESS).",
 }

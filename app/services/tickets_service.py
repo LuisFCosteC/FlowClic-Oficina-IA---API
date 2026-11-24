@@ -27,8 +27,8 @@ from app.util import new_id, now_iso
 STATUS_LABEL = {
     "PENDING": "PENDIENTE",
     "IN_PROGRESS": "EN CURSO",
-    "IN_QA": "EN QA",
     "IN_SENIOR_REVIEW": "REVISIÓN SENIOR",
+    "IN_QA": "EN QA",
     "IN_REVIEW": "REVISIÓN CTO",
     "DONE": "HECHO",
     "RETURNED": "DEVUELTA",

@@ -120,7 +120,7 @@ LEONARD = AgentTemplate(
         ],
         ticket_transitions=[
             ("PENDING", "IN_PROGRESS"),
-            ("IN_PROGRESS", "IN_QA"),
+            ("IN_PROGRESS", "IN_SENIOR_REVIEW"),
             ("RETURNED", "IN_PROGRESS"),
         ],
         only_assigned_tickets=True,
@@ -172,7 +172,7 @@ PENNY = AgentTemplate(
         ],
         ticket_transitions=[
             ("PENDING", "IN_PROGRESS"),
-            ("IN_PROGRESS", "IN_QA"),
+            ("IN_PROGRESS", "IN_SENIOR_REVIEW"),
             ("RETURNED", "IN_PROGRESS"),
         ],
         only_assigned_tickets=True,
@@ -213,7 +213,7 @@ RAJ = AgentTemplate(
         folder_access=FolderAccess(api="tests", front="tests", docs="qa_report"),
         project_scope="ALL",
         actions=["repo.read", "cmd.test", "cmd.lint", "cmd.audit"],
-        ticket_transitions=[("IN_QA", "IN_SENIOR_REVIEW"), ("IN_QA", "RETURNED")],
+        ticket_transitions=[("IN_QA", "IN_REVIEW"), ("IN_QA", "RETURNED")],
         only_assigned_tickets=False,
     ),
     model=ModelConfig(primary="gemini-flash", fallback="claude-haiku-5-5", fallback_condition=None),
