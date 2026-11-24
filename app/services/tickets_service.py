@@ -13,6 +13,7 @@ from app.domain.schemas import (
     RequestCreate,
     TaskCreate,
     Ticket,
+    TicketEdit,
     TicketTransitionBody,
 )
 from app.domain.ticket_flow import PROTECTED_AGENT_STATUSES, agent_status_for, can_transition
@@ -337,4 +338,66 @@ def transition(
         bus.emit("ticket.updated", ticket_payload(updated))
         if agent is not None:
             bus.emit("agent.updated", agent_payload(agent))
+    return updated
+
+
+def edit_ticket(db: Database, bus: EventBus | None, ticket_id: str, body: TicketEdit) -> Ticket:
+    """El CEO edita título, requerimiento, prioridad, modelo o proyecto (no si está HECHO)."""
+    ticket = get_ticket_or_404(db, ticket_id)
+    if ticket.status == "DONE":
+        raise conflict("El ticket ya está HECHO: no se puede editar")
+    sent = body.model_fields_set
+    title = ticket.title
+    if "title" in sent and body.title is not None:
+        title = body.title.strip()
+        if not title:
+            raise validation_error("El título no puede estar vacío")
+    requirement = ticket.requirement
+    description = ticket.description
+    if "requirement" in sent and body.requirement is not None:
+        requirement = body.requirement.strip()
+        description = requirement
+    priority = body.priority if "priority" in sent else ticket.priority
+    model = body.model if "model" in sent else ticket.model
+    if model is not None and model not in MODEL_IDS:
+        raise validation_error(
+            f"model: modelo desconocido: {model}",
+            [{"path": "model", "message": f"modelo desconocido: {model}"}],
+        )
+    project_id = body.project_id if "project_id" in sent else ticket.project_id
+    if project_id is not None and project_id != ticket.project_id:
+        projects_service.require_active(db, project_id)
+    changed = [
+        name
+        for name, old, new in (
+            ("title", ticket.title, title),
+            ("requirement", ticket.requirement, requirement),
+            ("priority", ticket.priority, priority),
+            ("model", ticket.model, model),
+            ("projectId", ticket.project_id, project_id),
+        )
+        if old != new
+    ]
+    if not changed:
+        return ticket
+    now = now_iso()
+    with db.transaction() as tx:
+        tx.execute(
+            "UPDATE tickets SET title = ?, description = ?, requirement = ?, priority = ?,"
+            " model = ?, project_id = ?, updated_at = ? WHERE id = ?",
+            (title, description, requirement, priority, model, project_id, now, ticket_id),
+        )
+        repo.insert_event(
+            tx,
+            event_id=new_id(),
+            ticket_id=ticket_id,
+            type_="UPDATED",
+            from_value=None,
+            to_value=None,
+            payload=json.dumps({"fields": changed}),
+            now=now,
+        )
+    updated = get_ticket_or_404(db, ticket_id)
+    if bus is not None:
+        bus.emit("ticket.updated", ticket_payload(updated))
     return updated

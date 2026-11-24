@@ -291,6 +291,16 @@ class TicketUpdate(StrictInput):
     position: Annotated[int, Field(ge=0, le=100_000)] | None = None
 
 
+class TicketEdit(StrictInput):
+    """Edición del CEO sobre un ticket. `priority`/`model` en null = "Por definir"."""
+
+    title: Title | None = None
+    requirement: Annotated[str, Field(min_length=1, max_length=5000)] | None = None
+    priority: Priority | None = None
+    model: Ref | None = None
+    project_id: ProjectId | None = None
+
+
 class TicketStatusBody(StrictInput):
     status: TicketStatus
 

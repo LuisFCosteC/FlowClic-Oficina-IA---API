@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from app.db.database import Database, get_db
-from app.domain.schemas import RequestCreate, TaskCreate, Ticket, TicketTransitionBody
+from app.domain.schemas import RequestCreate, TaskCreate, Ticket, TicketEdit, TicketTransitionBody
 from app.errors import ErrorResponse
 from app.events.bus import EventBus, get_bus
 from app.repositories import tickets_repo
@@ -62,3 +62,8 @@ def create_ticket(body: RequestCreate | TaskCreate, db: Db, bus: Bus) -> Ticket:
 )
 def transition(ticket_id: str, body: TicketTransitionBody, db: Db, bus: Bus) -> Ticket:
     return tickets_service.transition(db, bus, ticket_id, body)
+
+
+@router.patch("/{ticket_id}", summary="Editar un ticket (CEO)")
+def edit_ticket(ticket_id: str, body: TicketEdit, db: Db, bus: Bus) -> Ticket:
+    return tickets_service.edit_ticket(db, bus, ticket_id, body)
