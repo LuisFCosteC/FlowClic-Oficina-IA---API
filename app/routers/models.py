@@ -31,13 +31,14 @@ class ModelInfo(CamelModel):
     responses={503: {"model": ErrorResponse, "description": "API en modo SETUP"}},
 )
 def list_models(db: Annotated[Database, Depends(get_db)]) -> list[ModelInfo]:
+    usable = key_pool.usable_models(db, [(m.id, m.provider) for m in MODELS_CATALOG])
     return [
         ModelInfo(
             id=m.id,
             label=m.label,
             provider=m.provider,
             api_model=m.api_model,
-            has_connection=key_pool.has_usable_key(db, m.provider, m.id),
+            has_connection=usable[m.id],
         )
         for m in MODELS_CATALOG
     ]

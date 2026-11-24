@@ -63,6 +63,18 @@ def list_for_provider(db: Database, provider: str, status: str = "ACTIVE") -> li
     return [_row(r) for r in rows]
 
 
+def list_active_all(db: Database) -> list[KeyRow]:
+    rows = db.fetch_all(
+        f"SELECT {_META} FROM provider_keys WHERE status = 'ACTIVE'"  # noqa: S608
+        " ORDER BY position, created_at, id"
+    )
+    return [_row(r) for r in rows]
+
+
+def usage_rows_all(db: Database) -> list[Row]:
+    return db.fetch_all("SELECT * FROM key_usage")
+
+
 def get(db: Database, key_id: str) -> KeyRow | None:
     row = db.fetch_one(f"SELECT {_META} FROM provider_keys WHERE id = ?", (key_id,))  # noqa: S608
     return _row(row) if row else None

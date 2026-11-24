@@ -61,6 +61,31 @@ def is_usable(db: Database, row: repo.KeyRow, model: str, now: datetime | None =
     return True
 
 
+def usable_models(db: Database, models: list[tuple[str, str]]) -> dict[str, bool]:
+    """`hasConnection` de varios modelos [(id, proveedor)] con solo 2 consultas a la BD."""
+    now = datetime.now(UTC)
+    now_s = quota_time.iso(now)
+    keys = repo.list_active_all(db)
+    usage = repo.usage_rows_all(db)
+    result: dict[str, bool] = {}
+    for model_id, provider in models:
+        usable = False
+        for key in (k for k in keys if k.provider == provider):
+            day = quota_time.usage_day(provider, now)
+            rows = [u for u in usage if u["key_id"] == key.id and u["model"] == model_id]
+            if any(u["exhausted_until"] is not None and u["exhausted_until"] > now_s for u in rows):
+                continue
+            today = next((u for u in rows if u["day"] == day), None)
+            if today is not None:
+                tokens = int(today["input_tokens"]) + int(today["output_tokens"])
+                if key_service.limit_hit(key, int(today["requests"]), tokens):
+                    continue
+            usable = True
+            break
+        result[model_id] = usable
+    return result
+
+
 def has_usable_key(db: Database, provider: str, model: str) -> bool:
     """`hasConnection` de GET /api/models: existe una clave usable del proveedor para el modelo."""
     now = datetime.now(UTC)
