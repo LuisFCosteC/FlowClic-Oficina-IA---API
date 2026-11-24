@@ -118,6 +118,9 @@ def test_pick_model_elige_el_mas_reciente_y_estable_de_la_familia() -> None:
     assert pick_model(names, "flash", "x") == "gemini-2.5-flash"
     assert pick_model(names, "pro", "gemini-2.5-pro") == "gemini-1.5-pro"
     assert pick_model(["otra"], "pro", "x") is None
+    # todo en preview: gana el nombre base, no la variante especializada
+    only_preview = ["gemini-3.1-pro-preview-customtools", "gemini-3.1-pro-preview"]
+    assert pick_model(only_preview, "pro", "x") == "gemini-3.1-pro-preview"
 
 
 def test_si_el_modelo_no_existe_se_descubre_uno_equivalente_y_se_recuerda() -> None:

@@ -330,7 +330,18 @@ class HttpLlmClient:
         )
 
 
-_UNSTABLE = ("preview", "exp", "latest", "tts", "image", "live", "thinking", "audio", "embed")
+_UNSTABLE = (
+    "preview",
+    "exp",
+    "latest",
+    "tts",
+    "image",
+    "live",
+    "thinking",
+    "audio",
+    "embed",
+    "custom",
+)
 # id lógico del catálogo → nombre real descubierto cuando el configurado no existe
 _OVERRIDES: dict[str, str] = {}
 
@@ -344,10 +355,16 @@ def _version(name: str) -> tuple[int, ...]:
 
 
 def pick_model(names: list[str], family: str, bad: str) -> str | None:
-    """El modelo más reciente y estable de una familia (pro/flash/opus/sonnet/haiku)."""
+    """El modelo más reciente y estable de una familia (pro/flash/opus/sonnet/haiku).
+
+    Prefiere los estables; a igualdad, la versión más alta y el nombre más corto (así gana
+    `gemini-3-pro-preview` sobre variantes como `…-customtools`)."""
     pool = [n for n in names if family in n and n != bad]
-    stable = [n for n in pool if not any(u in n for u in _UNSTABLE)]
-    ranked = sorted(stable or pool, key=lambda n: (_version(n), n), reverse=True)
+    ranked = sorted(
+        pool,
+        key=lambda n: (not any(u in n for u in _UNSTABLE), _version(n), -len(n)),
+        reverse=True,
+    )
     return ranked[0] if ranked else None
 
 
