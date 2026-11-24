@@ -8,7 +8,7 @@ from app.domain.schemas import Ticket
 # Orden de columnas del tablero.
 _STATUS_ORDER = (
     "CASE status WHEN 'PENDING' THEN 0 WHEN 'IN_PROGRESS' THEN 1 WHEN 'IN_QA' THEN 2"
-    " WHEN 'IN_REVIEW' THEN 3 WHEN 'RETURNED' THEN 4 ELSE 5 END"
+    " WHEN 'IN_SENIOR_REVIEW' THEN 3 WHEN 'IN_REVIEW' THEN 4 WHEN 'RETURNED' THEN 5 ELSE 6 END"
 )
 
 
@@ -101,7 +101,7 @@ def set_status(db: Database, ticket_id: str, status: str, now: str) -> None:
 def count_active_for_agent(db: Database, agent_id: str, exclude_ticket: str) -> int:
     row = db.fetch_one(
         "SELECT COUNT(*) AS n FROM tickets WHERE assigned_agent_id = ? AND id <> ?"
-        " AND status IN ('IN_PROGRESS','IN_QA','IN_REVIEW','RETURNED')",
+        " AND status IN ('IN_PROGRESS','IN_QA','IN_SENIOR_REVIEW','IN_REVIEW','RETURNED')",
         (agent_id, exclude_ticket),
     )
     return int(row["n"]) if row else 0
@@ -133,9 +133,18 @@ def insert_event(
     to_value: str | None,
     payload: str,
     now: str,
+    actor: str = "human",
 ) -> None:
     db.execute(
         "INSERT INTO ticket_events (id, ticket_id, type, from_value, to_value, actor, payload,"
-        " created_at) VALUES (?, ?, ?, ?, ?, 'human', ?, ?)",
-        (event_id, ticket_id, type_, from_value, to_value, payload, now),
+        " created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (event_id, ticket_id, type_, from_value, to_value, actor, payload, now),
     )
+
+
+def count_open_subtasks(db: Database, ticket_id: str) -> int:
+    row = db.fetch_one(
+        "SELECT COUNT(*) AS n FROM tickets WHERE parent_ticket_id = ? AND status <> 'DONE'",
+        (ticket_id,),
+    )
+    return int(row["n"]) if row else 0

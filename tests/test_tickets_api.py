@@ -69,13 +69,13 @@ def test_full_flow_updates_agent(client: TestClient, migrated_db: Database) -> N
     assert _agent_status(client, aid) == "REVIEW"
     assert _move(client, tid, "RETURNED").status_code == 200
     assert _agent_status(client, aid) == "WORKING"
-    for to in ("IN_PROGRESS", "IN_QA", "IN_REVIEW", "DONE"):
+    for to in ("IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW", "DONE"):
         assert _move(client, tid, to).status_code == 200, to
     assert _agent_status(client, aid) == "IDLE"
     ev = migrated_db.fetch_all(
         "SELECT type FROM ticket_events WHERE ticket_id = ? AND type = 'STATUS_CHANGED'", (tid,)
     )
-    assert len(ev) == 7
+    assert len(ev) == 8
 
 
 def test_invalid_transition_409(client: TestClient) -> None:
@@ -97,7 +97,7 @@ def test_done_keeps_agent_busy_with_other_active(client: TestClient) -> None:
     t1 = _ticket(client, aid, "A")["id"]
     t2 = _ticket(client, aid, "B")["id"]
     _move(client, t2, "IN_PROGRESS")
-    for to in ("IN_PROGRESS", "IN_QA", "IN_REVIEW", "DONE"):
+    for to in ("IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW", "DONE"):
         _move(client, t1, to)
     assert _agent_status(client, aid) != "IDLE"
 
@@ -112,7 +112,7 @@ def test_r1_blocked_agent_untouched(client: TestClient) -> None:
 
 def test_gate_pending_blocks_done(client: TestClient, migrated_db: Database) -> None:
     tid = _ticket(client)["id"]
-    for to in ("IN_PROGRESS", "IN_QA", "IN_REVIEW"):
+    for to in ("IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW"):
         _move(client, tid, to)
     migrated_db.execute(
         "INSERT INTO approvals (id, ticket_id, title, gate, requested_at)"

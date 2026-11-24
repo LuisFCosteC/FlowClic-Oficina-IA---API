@@ -28,7 +28,8 @@ STATUS_LABEL = {
     "PENDING": "PENDIENTE",
     "IN_PROGRESS": "EN CURSO",
     "IN_QA": "EN QA",
-    "IN_REVIEW": "EN REVISIÓN",
+    "IN_SENIOR_REVIEW": "REVISIÓN SENIOR",
+    "IN_REVIEW": "REVISIÓN CTO",
     "DONE": "HECHO",
     "RETURNED": "DEVUELTA",
 }
@@ -242,6 +243,34 @@ def _check_limits(db: Database, ticket: Ticket, to: str) -> None:
         )
 
 
+def authorize_agent_transition(db: Database, agent_id: str, ticket: Ticket, to: str) -> Agent:
+    """403 `TRANSITION_FORBIDDEN` si el agente simulado no puede hacer esta transición (GM02).
+
+    Reglas duras: la pareja (origen, destino) debe estar en sus `ticketTransitions`, y con
+    `onlyAssignedTickets` el ticket debe estar asignado a él. Lo evalúa el servidor, nunca el
+    modelo.
+    """
+    agent = agents_repo.get_agent(db, agent_id)
+    if agent is None or agent.archived_at is not None:
+        raise validation_error(
+            "actingAgentId: el agente no existe o está archivado",
+            [{"path": "actingAgentId", "message": "no existe o archivado"}],
+        )
+    pair = (ticket.status, to)
+    if pair not in {(a, b) for a, b in agent.permissions.ticket_transitions}:
+        raise AppError(
+            "TRANSITION_FORBIDDEN",
+            f"{agent.name} no puede pasar un ticket de {STATUS_LABEL[ticket.status]} "
+            f"a {STATUS_LABEL[to]}",
+        )
+    if agent.permissions.only_assigned_tickets and ticket.assigned_agent_id != agent.id:
+        raise AppError(
+            "TRANSITION_FORBIDDEN",
+            f"{agent.name} solo puede mover tickets asignados a él",
+        )
+    return agent
+
+
 def transition(
     db: Database, bus: EventBus | None, ticket_id: str, body: TicketTransitionBody
 ) -> Ticket:
@@ -254,11 +283,27 @@ def transition(
             "INVALID_TRANSITION",
             f"No se puede pasar de {STATUS_LABEL[ticket.status]} a {STATUS_LABEL[body.to]}",
         )
+    actor = "human"
+    if body.acting_agent_id is not None:
+        acting = authorize_agent_transition(db, body.acting_agent_id, ticket, body.to)
+        actor = acting.id
     if body.to == "DONE" and repo.count_pending_gates(db, ticket_id) > 0:
         raise AppError("GATE_PENDING", "El ticket tiene compuertas de aprobación pendientes")
+    if body.to == "DONE" and ticket.kind == "REQUEST":
+        open_subtasks = repo.count_open_subtasks(db, ticket_id)
+        if open_subtasks > 0:
+            raise AppError(
+                "SUBTASKS_PENDING",
+                f"El pedido tiene {open_subtasks} subtareas sin terminar: ciérralas antes",
+            )
     _check_limits(db, ticket, body.to)
     now = now_iso()
-    payload = json.dumps({"note": body.note} if body.note else {}, ensure_ascii=False)
+    extra: dict[str, str] = {}
+    if body.note:
+        extra["note"] = body.note
+    if actor != "human":
+        extra["actingAgentId"] = actor  # simulado por un agente
+    payload = json.dumps(extra, ensure_ascii=False)
     with db.transaction() as tx:
         repo.set_status(tx, ticket_id, body.to, now)
         repo.insert_event(
@@ -270,6 +315,7 @@ def transition(
             to_value=body.to,
             payload=payload,
             now=now,
+            actor=actor,
         )
         agent = _apply_agent_effect(tx, ticket, body.to, now)
     updated = get_ticket_or_404(db, ticket_id)

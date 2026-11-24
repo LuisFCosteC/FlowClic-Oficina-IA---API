@@ -92,7 +92,7 @@ def test_permisos_del_ceo() -> None:
         "front": "tests",
         "docs": "qa_report",
     }
-    assert t["Raj"].ticket_transitions == [("IN_QA", "IN_REVIEW"), ("IN_QA", "RETURNED")]
+    assert t["Raj"].ticket_transitions == [("IN_QA", "IN_SENIOR_REVIEW"), ("IN_QA", "RETURNED")]
     assert [x.only_assigned_tickets for x in t.values()] == [False, True, True, False]
     for name in ("Leonard", "Penny", "Raj"):
         assert "approvals.create" not in t[name].actions

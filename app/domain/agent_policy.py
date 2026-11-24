@@ -66,8 +66,10 @@ VALID_TRANSITIONS: frozenset[tuple[TicketStatus, TicketStatus]] = frozenset(
     {
         ("PENDING", "IN_PROGRESS"),
         ("IN_PROGRESS", "IN_QA"),
-        ("IN_QA", "IN_REVIEW"),
+        ("IN_QA", "IN_SENIOR_REVIEW"),
         ("IN_QA", "RETURNED"),
+        ("IN_SENIOR_REVIEW", "IN_REVIEW"),
+        ("IN_SENIOR_REVIEW", "RETURNED"),
         ("IN_REVIEW", "DONE"),
         ("IN_REVIEW", "RETURNED"),
         ("RETURNED", "IN_PROGRESS"),

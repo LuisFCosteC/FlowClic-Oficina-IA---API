@@ -95,7 +95,7 @@ def test_transiciones_fuera_del_grafo_dan_400() -> None:
     assert code_of("CUSTOM", bad) == "VALIDATION_ERROR"
     for t in VALID_TRANSITIONS:
         check_permissions("CUSTOM", perms(ticketTransitions=[list(t)]))
-    assert len(VALID_TRANSITIONS) == 7
+    assert len(VALID_TRANSITIONS) == 9
 
 
 def test_modelos_del_catalogo() -> None:

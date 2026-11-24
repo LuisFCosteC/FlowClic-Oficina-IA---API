@@ -75,7 +75,7 @@ def test_tickets_sin_agente_no_cuentan_para_el_limite(client: TestClient) -> Non
 def test_require_approval_for_done(client: TestClient, migrated_db: Database) -> None:
     aid = _agent(client)["id"]
     tid = _ticket(client, aid)
-    for to in ("IN_PROGRESS", "IN_QA", "IN_REVIEW"):
+    for to in ("IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW"):
         assert _move(client, tid, to).status_code == 200
     _limits(client, requireApprovalForDone=True)
     r = _move(client, tid, "DONE")
@@ -92,7 +92,7 @@ def test_require_approval_for_done(client: TestClient, migrated_db: Database) ->
 
 def test_sin_require_approval_se_puede_pasar_a_hecho(client: TestClient) -> None:
     tid = _ticket(client, _agent(client)["id"])
-    for to in ("IN_PROGRESS", "IN_QA", "IN_REVIEW", "DONE"):
+    for to in ("IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW", "DONE"):
         assert _move(client, tid, to).status_code == 200
 
 

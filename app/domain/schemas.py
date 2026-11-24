@@ -11,7 +11,9 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_seriali
 from pydantic.alias_generators import to_camel
 
 AgentStatus = Literal["IDLE", "WORKING", "REVIEW", "BLOCKED", "SLEEP_QUOTA"]
-TicketStatus = Literal["PENDING", "IN_PROGRESS", "IN_QA", "IN_REVIEW", "DONE", "RETURNED"]
+TicketStatus = Literal[
+    "PENDING", "IN_PROGRESS", "IN_QA", "IN_SENIOR_REVIEW", "IN_REVIEW", "DONE", "RETURNED"
+]
 Gate = Literal[1, 2, 3, 4]  # 1 Alcance · 2 Arquitectura · 3 Merge · 4 Producción
 Priority = Literal["HIGH", "MEDIUM", "LOW"]
 ModelTier = Literal["opus_pro", "sonnet_pro", "haiku_flash"]
@@ -294,10 +296,11 @@ class TicketStatusBody(StrictInput):
 
 
 class TicketTransitionBody(StrictInput):
-    """`POST /api/tickets/{id}/transition` (PLAN §19.4). `actingAgentId` llegará con S09."""
+    """`POST /api/tickets/{id}/transition`; `actingAgentId` simula a un agente (GM02)."""
 
     to: TicketStatus
     note: Annotated[str, Field(max_length=1000)] | None = None
+    acting_agent_id: Ref | None = None
 
 
 class TicketAssignBody(StrictInput):
