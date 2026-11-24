@@ -6,7 +6,7 @@ Pendiente: `actingAgentId` y permisos por agente (S09), edición/reasignación/b
 import json
 
 from app.db.database import Database
-from app.domain.agent_policy import GLOBAL_RESTRICTIONS, is_self_review
+from app.domain.agent_policy import GLOBAL_RESTRICTIONS, is_self_review, is_senior_reviewer
 from app.domain.models_catalog import MODEL_IDS
 from app.domain.schemas import (
     Agent,
@@ -263,6 +263,14 @@ def authorize_agent_transition(db: Database, agent_id: str, ticket: Ticket, to: 
             f"{agent.name} no puede pasar un ticket de {STATUS_LABEL[ticket.status]} "
             f"a {STATUS_LABEL[to]}",
         )
+    if pair == ("IN_PROGRESS", "IN_QA") and agent.reports_to is not None:
+        boss = agents_repo.get_agent(db, agent.reports_to)
+        if boss is not None and boss.archived_at is None and is_senior_reviewer(boss.permissions):
+            raise AppError(
+                "TRANSITION_FORBIDDEN",
+                f"{agent.name} reporta a {boss.name} (revisor senior): debe pasar por "
+                "REVISIÓN SENIOR antes de EN QA",
+            )
     if is_self_review(agent.id, ticket.assigned_agent_id, ticket.kind, pair):
         raise AppError(
             "TRANSITION_FORBIDDEN",

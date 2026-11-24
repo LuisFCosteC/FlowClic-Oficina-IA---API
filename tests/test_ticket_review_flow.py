@@ -36,11 +36,11 @@ def test_el_grafo_tiene_las_dos_revisiones() -> None:
     assert ("IN_SENIOR_REVIEW", "RETURNED") in VALID_TRANSITIONS
     assert ("IN_QA", "IN_REVIEW") in VALID_TRANSITIONS
     assert ("IN_QA", "RETURNED") in VALID_TRANSITIONS
-    assert ("IN_PROGRESS", "IN_QA") not in VALID_TRANSITIONS  # no se salta la revisión senior
+    assert ("IN_PROGRESS", "IN_QA") in VALID_TRANSITIONS  # directo a QA (solo sin revisor senior)
     assert ("IN_SENIOR_REVIEW", "IN_REVIEW") not in VALID_TRANSITIONS  # ni la de QA
-    assert can_transition("IN_PROGRESS", "IN_QA") == "INVALID"
+    assert can_transition("IN_PROGRESS", "IN_QA") == "ALLOWED"
     assert can_transition("IN_SENIOR_REVIEW", "DONE") == "INVALID"
-    assert len(VALID_TRANSITIONS) == 9
+    assert len(VALID_TRANSITIONS) == 10
 
 
 def test_flujo_completo_con_las_dos_revisiones_y_efecto_en_el_agente(client: TestClient) -> None:
@@ -170,3 +170,51 @@ def test_un_pedido_no_se_cierra_con_subtareas_abiertas(
     finish(client, request_with_subtasks["subs"][1])
     assert move(client, req, "DONE").status_code == 200
     assert client.get(f"{T}/{req}").json()["status"] == "DONE"
+
+
+DIRECT = [["PENDING", "IN_PROGRESS"], ["IN_PROGRESS", "IN_QA"], ["IN_PROGRESS", "IN_SENIOR_REVIEW"]]
+
+
+def test_directo_a_qa_solo_si_no_reporta_a_un_revisor_senior(client: TestClient) -> None:
+    senior = agent(
+        client,
+        "Leonard",
+        permissions=perms([["IN_SENIOR_REVIEW", "IN_QA"], ["IN_SENIOR_REVIEW", "RETURNED"]], False),
+    )
+    # Penny reporta a Leonard (revisor senior): debe pasar por REVISIÓN SENIOR
+    penny = agent(client, "Penny", reportsTo=senior["id"], permissions=perms(DIRECT))
+    # Raj no reporta a un senior (reporta al CEO): puede ir directo a QA
+    raj = agent(client, "Raj", permissions=perms(DIRECT))
+    for who, expected in ((penny, 403), (raj, 200)):
+        tid = str(make_ticket(assigned_agent_id=who["id"])["id"])
+        assert move(client, tid, "IN_PROGRESS", acting=who["id"]).status_code == 200
+        r = move(client, tid, "IN_QA", acting=who["id"])
+        assert r.status_code == expected, r.text
+        if expected == 403:
+            assert "REVISIÓN SENIOR" in r.json()["error"]["message"]
+            assert move(client, tid, "IN_SENIOR_REVIEW", acting=who["id"]).status_code == 200
+
+
+def test_nadie_mueve_desde_revision_senior_un_ticket_propio(client: TestClient) -> None:
+    senior = agent(
+        client,
+        "Leonard",
+        permissions=perms(
+            [
+                ["PENDING", "IN_PROGRESS"],
+                ["IN_PROGRESS", "IN_SENIOR_REVIEW"],
+                ["IN_SENIOR_REVIEW", "IN_QA"],
+                ["IN_SENIOR_REVIEW", "RETURNED"],
+            ],
+            False,
+        ),
+    )
+    own = str(make_ticket(assigned_agent_id=senior["id"])["id"])
+    other = str(make_ticket(assigned_agent_id=None)["id"])
+    for tid in (own, other):
+        assert move(client, tid, "IN_PROGRESS", acting=senior["id"]).status_code == 200
+        assert move(client, tid, "IN_SENIOR_REVIEW", acting=senior["id"]).status_code == 200
+    denied = move(client, own, "IN_QA", acting=senior["id"])
+    assert denied.status_code == 403 and "propio" in denied.json()["error"]["message"]
+    assert move(client, own, "RETURNED", acting=senior["id"]).status_code == 403
+    assert move(client, other, "IN_QA", acting=senior["id"]).status_code == 200

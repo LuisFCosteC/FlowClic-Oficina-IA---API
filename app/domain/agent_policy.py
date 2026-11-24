@@ -69,6 +69,7 @@ VALID_TRANSITIONS: frozenset[tuple[TicketStatus, TicketStatus]] = frozenset(
     {
         ("PENDING", "IN_PROGRESS"),
         ("IN_PROGRESS", "IN_SENIOR_REVIEW"),
+        ("IN_PROGRESS", "IN_QA"),  # directo a QA: solo quien no reporta a un revisor senior
         ("IN_SENIOR_REVIEW", "IN_QA"),
         ("IN_SENIOR_REVIEW", "RETURNED"),
         ("IN_QA", "IN_REVIEW"),
@@ -251,6 +252,16 @@ def is_self_review(
     transition: tuple[TicketStatus, TicketStatus],
 ) -> bool:
     """Restricción 6: nadie aprueba o devuelve su propio trabajo (subtareas)."""
-    return (
-        ticket_kind == "TASK" and ticket_assignee == agent_id and transition in REVIEW_TRANSITIONS
-    )
+    if ticket_assignee != agent_id:
+        return False
+    if transition[0] == "IN_SENIOR_REVIEW":  # nadie se revisa a sí mismo, sea pedido o subtarea
+        return True
+    return ticket_kind == "TASK" and transition in REVIEW_TRANSITIONS
+
+
+SENIOR_PASS = ("IN_SENIOR_REVIEW", "IN_QA")
+
+
+def is_senior_reviewer(permissions: Permissions) -> bool:
+    """Un revisor senior es un agente con permiso para pasar REVISIÓN SENIOR → EN QA."""
+    return SENIOR_PASS in {(a, b) for a, b in permissions.ticket_transitions}
