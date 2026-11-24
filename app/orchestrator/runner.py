@@ -513,6 +513,8 @@ class Orchestrator:
     def _loop(self, agent: Agent, user: str, tools: dict[str, Tool]) -> str:
         """Conversación con herramientas hasta una herramienta terminal o texto final."""
         models = [agent.model.primary] + ([agent.model.fallback] if agent.model.fallback else [])
+        if "gemini-pro" in models and "gemini-flash" not in models:
+            models.append("gemini-flash")  # Pro suele agotarse (o no estar en el plan gratis)
         specs = [t.spec for t in tools.values()]
         turns: list[Turn] = [Turn("user", user)]
         last_text = ""

@@ -391,7 +391,7 @@ def complete_with_pool(
     Prueba `model_ids` en orden (principal y respaldo). Sin clave para ninguno →
     `NO_KEY_AVAILABLE` (y el agente pasa a SLEEP_QUOTA).
     """
-    last: AppError | None = None
+    reasons: list[str] = []
     for model_id in model_ids:
         found = provider_of(model_id)
         if found is None:
@@ -406,7 +406,7 @@ def complete_with_pool(
                     else pool.acquire(provider, model_id)
                 )
             except AppError as exc:
-                last = exc
+                reasons.append(f"{model_id}: {exc.message}")
                 break
             try:
                 reply = client.complete(
@@ -418,11 +418,13 @@ def complete_with_pool(
                     tools=tools,
                 )
             except LlmRateLimited as exc:
+                reasons.append(f"{model_id}: una clave llegó a su límite (429)")
                 pool.report_exhausted(
                     key.key_id, model_id, retry_after_seconds=exc.retry_after, error_code="429"
                 )
                 continue
             except LlmInvalidKey as exc:
+                reasons.append(f"{model_id}: el proveedor rechazó una clave (HTTP {exc.status})")
                 pool.report_invalid(key.key_id, str(exc.status))
                 continue
             except LlmModelNotFound as exc:
@@ -439,6 +441,5 @@ def complete_with_pool(
                 continue
             pool.report_usage(key.key_id, model_id, reply.input_tokens, reply.output_tokens, 0.0)
             return reply
-    if last is not None:
-        raise last
-    raise AppError("NO_KEY_AVAILABLE", "Ningún modelo del agente tiene una clave disponible")
+    detail = "; ".join(dict.fromkeys(reasons)) or "ningún modelo del agente tiene clave"
+    raise AppError("NO_KEY_AVAILABLE", f"Sin clave utilizable. {detail}")
